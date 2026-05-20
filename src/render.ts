@@ -1,5 +1,6 @@
 import { getMarkdownTheme } from "@earendil-works/pi-coding-agent";
 import { Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
+import type { AgyToolDetails } from "./types";
 
 // ── TUI rendering ──────────────────────────────────────────────────────────────
 
@@ -47,12 +48,20 @@ export function renderCall(args: any, theme: any): any {
 
 /** Shared renderResult for all agy tools. */
 export function renderResult(result: any, { expanded }: any, theme: any): any {
+	const details = result.details as AgyToolDetails | undefined;
 	const text = result.content[0]?.type === "text" ? result.content[0].text : "(no output)";
+
+	const metaParts: string[] = [];
+	if (details?.model) metaParts.push(details.model);
+	if (details?.durationMs) metaParts.push(`${(details.durationMs / 1000).toFixed(1)}s`);
+	if (details?.account) metaParts.push(details.account);
+	const meta = metaParts.length ? `  ${metaParts.map((p) => theme.fg("dim", p)).join("  ")}` : "";
 
 	if (result.isError) {
 		return new Text(
 			theme.fg("error", "\u2717 ") +
 				theme.fg("toolTitle", theme.bold("Agy")) +
+				meta +
 				`\n${theme.fg("error", text.length > 500 ? `${text.slice(0, 500)}\u2026` : text)}`,
 			0,
 			0,
@@ -60,7 +69,7 @@ export function renderResult(result: any, { expanded }: any, theme: any): any {
 	}
 
 	const icon = theme.fg("success", "\u2713");
-	const headerLine = `${icon} ${theme.fg("toolTitle", theme.bold("Agy"))}`;
+	const headerLine = `${icon} ${theme.fg("toolTitle", theme.bold("Agy"))}${meta}`;
 
 	if (expanded) {
 		const mdTheme = getMarkdownTheme();

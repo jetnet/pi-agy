@@ -96,23 +96,19 @@ export async function backupProfile(name: string): Promise<{ ok: true; email: st
 		const destDir = profileDir(name);
 		await ensureDir(destDir);
 
-		// Copy google_accounts.json
-		await fs.promises.copyFile(googleAccountsPath(), path.join(destDir, "google_accounts.json"));
+		// Read+write atomically with 0o600 — no race window, no separate chmod needed
+		const googleContent = await fs.promises.readFile(googleAccountsPath());
+		const destGoogle = path.join(destDir, "google_accounts.json");
+		await fs.promises.writeFile(destGoogle, googleContent, { mode: 0o600 });
 
-		// Copy oauth_creds.json if it exists
+		// Read+write oauth_creds atomically if it exists, with ENOENT-only suppression
+		const destOauth = path.join(destDir, "oauth_creds.json");
 		try {
-			await fs.promises.access(oauthCredsPath());
-			await fs.promises.copyFile(oauthCredsPath(), path.join(destDir, "oauth_creds.json"));
-		} catch {
-			// oauth_creds may not exist (API key auth)
-		}
-
-		// Set file permissions
-		try {
-			await fs.promises.chmod(path.join(destDir, "google_accounts.json"), 0o600);
-			await fs.promises.chmod(path.join(destDir, "oauth_creds.json"), 0o600);
-		} catch {
-			// Best-effort
+			const oauthContent = await fs.promises.readFile(oauthCredsPath());
+			await fs.promises.writeFile(destOauth, oauthContent, { mode: 0o600 });
+		} catch (err) {
+			// oauth_creds.json doesn't exist for API-key-auth — best-effort skip
+			if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
 		}
 
 		// Write metadata
@@ -167,11 +163,11 @@ export async function switchProfile(name: string): Promise<{ ok: true; email: st
 
 		const profileOauthPath = path.join(srcDir, "oauth_creds.json");
 		try {
-			await fs.promises.access(profileOauthPath);
-			await fs.promises.copyFile(profileOauthPath, oauthCredsPath());
-			await fs.promises.chmod(oauthCredsPath(), 0o600);
-		} catch {
+			const oauthContent = await fs.promises.readFile(profileOauthPath);
+			await fs.promises.writeFile(oauthCredsPath(), oauthContent, { mode: 0o600 });
+		} catch (err) {
 			// No oauth_creds in profile — that's fine
+			if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
 		}
 
 		return { ok: true, email: parsed.active };

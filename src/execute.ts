@@ -52,8 +52,14 @@ export function spawnAgy(prompt: string, opts: SpawnAgyOptions): Promise<SpawnAg
 			stderrRaw += chunk.toString("utf-8");
 		});
 
+		let onAbort: (() => void) | undefined;
+		let killTimer: ReturnType<typeof setTimeout> | undefined;
+
 		proc.on("close", (code) => {
 			clearInterval(progressInterval);
+			if (onAbort && opts.signal) opts.signal.removeEventListener("abort", onAbort);
+			if (killTimer) clearTimeout(killTimer);
+
 			const durationMs = Date.now() - startTime;
 
 			const filteredStderr = stderrRaw
@@ -92,12 +98,16 @@ export function spawnAgy(prompt: string, opts: SpawnAgyOptions): Promise<SpawnAg
 		if (opts.signal) {
 			const kill = () => {
 				proc.kill("SIGTERM");
-				setTimeout(() => {
+				killTimer = setTimeout(() => {
 					if (!proc.killed) proc.kill("SIGKILL");
 				}, 5000);
 			};
-			if (opts.signal.aborted) kill();
-			else opts.signal.addEventListener("abort", kill, { once: true });
+			if (opts.signal.aborted) {
+				kill();
+			} else {
+				onAbort = kill;
+				opts.signal.addEventListener("abort", onAbort, { once: true });
+			}
 		}
 	});
 }

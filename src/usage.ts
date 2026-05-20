@@ -40,24 +40,17 @@ function readRecords(): UsageRecord[] {
 
 function getWindowStart(window: string): Date {
 	const now = new Date();
+	const utcMidnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 	switch (window) {
-		case "today": {
-			const d = new Date(now);
-			d.setHours(0, 0, 0, 0);
-			return d;
-		}
+		case "today":
+			return utcMidnight;
 		case "week": {
-			const d = new Date(now);
-			d.setDate(d.getDate() - d.getDay());
-			d.setHours(0, 0, 0, 0);
+			const d = new Date(utcMidnight);
+			d.setUTCDate(d.getUTCDate() - d.getUTCDay());
 			return d;
 		}
-		case "month": {
-			const d = new Date(now);
-			d.setDate(1);
-			d.setHours(0, 0, 0, 0);
-			return d;
-		}
+		case "month":
+			return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 		default:
 			return new Date(0);
 	}
