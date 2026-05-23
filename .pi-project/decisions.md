@@ -1,92 +1,136 @@
 # Decisions
 
-Append-only. One block per design decision. See
-`Dev/Projects/pi-project/template.md` for format.
-
-If a past decision is reversed, **append a new entry** citing the
-old one — never edit the old entry.
-
----
+Decisions are append-only. Superseded decisions are marked but not deleted.
 
 ## M0-a: Build as a Pi extension (not subagent or pi-interactive-shell config)
 
 **Date:** 2026-05-20
-**Context:** User wants `agy` callable "similarly to subagents" from Pi. Investigation showed `pi-interactive-shell` has a hardcoded allowlist (`pi`/`codex`/`claude`/`cursor`) and `pi-subagents` always spawns `pi`, never external CLIs.
-**Decision:** Build pi-agy as a standalone Pi extension under `~/.pi/agent/extensions/pi-agy/`, registering 5 tools via `pi.registerTool()`. Pi auto-discovers via the `package.json` `pi.extensions` field.
-**Rationale:** Subagents can't spawn external CLIs without invasive patching. pi-interactive-shell only handles TUI agents (no headless `-p` delegation). A dedicated extension gives clean per-tool delegation, type-safe TypeBox schemas, and integrates with Pi's tool-call lifecycle (renderCall/renderResult) without touching upstream code.
+**Context:** agy could be invoked via a shell alias, a Pi skill, or a Pi extension with registered tools. The goal is LLM-callable tools, not user-typed shortcuts.
+**Decision:** Pi extension with `pi.registerTool()`. Tools are visible to Opus in the system prompt and callable without user intervention.
+**Rationale:** Extension tools are first-class in Pi's LLM routing. Skills and aliases require the user to type `/skill:name`, breaking the frictionless invariant.
 **Alternatives considered:**
-- *Add `agy` to pi-interactive-shell's allowlist via config* — TUI-only, no headless delegation, would fight the existing extension's design.
-- *Patch pi-subagents to spawn arbitrary CLIs* — invasive, fragile across upstream updates, not generalizable.
-- *Reuse @agnishc/edb-gemini-proxy by repointing it at agy* — wrong CLI semantics; agy 1.0.0 has different flags than the old gemini-cli (no `--model`, no `--output-format json`, stdin piping unreliable).
-**Consequences:** Each tool gets its own intent/schema and shows up independently in Pi's tool list. Discoverability becomes a `promptSnippet`/`promptGuidelines` problem (see M1). Future tool additions are append-only — no churn to existing surfaces.
+- *Pi skill* — requires explicit `/skill:agy-design` invocation; user must remember it.
+- *Shell alias* — not LLM-callable at all.
+**Consequences:** Extension must be loaded at Pi startup. Registered in `settings.json` under `packages`.
 
 ---
 
-## M0-b: Hardcode Gemini Flash 3.5 High (no model parameter exposed by pi-agy)
+## M0-b: Hardcode Gemini Flash 3.5 High (no model parameter) ~~SUPERSEDED by M1-b~~
 
 **Date:** 2026-05-20
-**Context:** `agy --help` claims a `-m`/`--model` flag, but agy 1.0.0 silently ignores it; model selection is TUI-only via the `/model` slash command. Print mode (`-p`) inherits the last interactively-selected model.
-**Decision:** pi-agy assumes Flash 3.5 High is the active model in agy. No model parameter on any tool. Users who need other models (Claude Sonnet 4.6, GPT-OSS-120b, Gemini Pro) invoke `agy` directly, not through pi-agy.
-**Rationale:** We can't actually override the model from `-p` mode. Adding a model parameter would lie about capability and create silent failures. The vision invariant is design tasks → Flash 3.5 is the strongest mode for Tailwind/React anyway.
-**Alternatives considered:**
-- *TUI-scrape the current model from agy's status line* — fragile, agy's ANSI codes can change between releases, breaks zero-config.
-- *Add a passthrough `model` flag that fails silently* — confusing UX; user thinks they switched but didn't.
-- *Run `agy /model <name>` ourselves before each call* — breaks zero-config invariant, adds latency, requires TUI automation.
-**Consequences:** Users must set Flash 3.5 once via `agy` then `/model` in the TUI. Documented in README and in tool descriptions ("Gemini Flash 3.5"). Promptrecipes (M5) can be Flash-tuned without worrying about cross-model portability.
+**Context:** `agy --help` documents a `-m`/`--model` flag, but agy 1.0.0 silently ignores it. Model selection is TUI-only via `/model`.
+**Decision:** Assume Flash 3.5 High is the active model. Display `"gemini-3.5-flash-high"` in tool details. No model parameter on any tool.
+**Superseded:** M1-b replaces the hardcoded string with a live probe.
 
 ---
 
-## M0-c: Profile-based account swap via `~/.pi/agy-accounts/` (not env vars or auth flow)
+## M0-c: Profile-based account swap via `~/.pi/agy-accounts/`
 
 **Date:** 2026-05-20
-**Context:** User has personal + work Google accounts for Antigravity. agy reads OAuth credentials from `~/.gemini/oauth_creds.json` and `~/.gemini/google_accounts.json` on each call. No native multi-account support; only third-party tools (aisw, AntigravityManager) handle this.
-**Decision:** Implement `agy_account` with actions `list`/`current`/`backup`/`switch`. Backup copies the two `~/.gemini/*.json` files into `~/.pi/agy-accounts/<profile>/` at file mode 0600. Switch reads the named profile and writes content back into `~/.gemini/` via `writeFile { mode: 0o600 }` (atomic, no race window). Auto-snapshot the current state to `.last-active/` before any switch for rollback.
-**Rationale:** agy reads creds from `~/.gemini/` directly per call, so profile swap requires zero changes to agy itself. Profile names are strictly validated (`/^[a-zA-Z0-9_-]+$/`) to prevent path traversal — added as P0 fix after adversarial review found `name = "../evil"` could escape the sandbox.
+**Context:** User has personal + work Google accounts. agy reads OAuth credentials from `~/.gemini/oauth_creds.json` and `~/.gemini/google_accounts.json` on each call. No native multi-account support.
+**Decision:** `agy_account` with actions `list`/`current`/`backup`/`switch`. Backup copies the two `~/.gemini/*.json` files into `~/.pi/agy-accounts/<profile>/` at mode 0600. Switch writes them back atomically. Auto-snapshot to `.last-active/` before any switch.
+**Rationale:** agy reads creds from `~/.gemini/` per call — profile swap requires zero changes to agy itself. Profile names validated with `/^[a-zA-Z0-9_-]+$/` to prevent path traversal.
 **Alternatives considered:**
-- *`GEMINI_HOME` env var per call* — agy 1.0.0 doesn't honor it.
-- *Shadow `~/.gemini/` symlinks per profile* — too clever, easy to corrupt, fragile under concurrent access.
-- *Rely on third-party tools (aisw, AntigravityManager)* — external dependency, version drift, not under our control.
-**Consequences:** Already-running agy sessions retain their loaded credentials until restart (documented limitation). Profile names must be alphanumeric + hyphen/underscore. Adversarial review identified two P0 vulnerabilities here (path traversal + TOCTOU), both fixed.
+- *`GEMINI_HOME` env var* — agy 1.0.0 doesn't honor it.
+- *Symlinks per profile* — fragile under concurrent access.
+- *Third-party tools (aisw, AntigravityManager)* — external dependency.
+**Consequences:** Running agy sessions retain loaded credentials until restart. Profile names must be alphanumeric + hyphen/underscore.
 
 ---
 
 ## M0-d: Soft-warn quota, never refuse calls
 
 **Date:** 2026-05-20
-**Context:** Antigravity's free tier was slashed ~92% in March 2026; weekly quota cycle. Real quota lives behind Google API — invisible to pi-agy. User had to choose between hard cap (interrupt mid-task) and soft warn (informational).
-**Decision:** Append every call to `~/.pi/agy-usage.jsonl` (one JSON object per line: timestamp, tool, account, latency, prompt size, response size, exit code). The `agy_usage` tool summarizes by window (today/week/month/all). Soft-warn fires inline at >50 calls/day or >200/week but `never refuses` the call.
-**Rationale:** Refusing mid-task is worse than overage. Local counter is approximate (doesn't see cross-source agy usage) but informs the user enough to switch accounts or pace work. Aligns with the vision invariant: frictionless UX > strict quota policing.
-**Alternatives considered:**
-- *Hard cap at 50/day* — interrupts real work, violates frictionless invariant.
-- *No counter at all, trust Google's quota* — invisible failures when quota exhausts mid-task.
-- *Scrape `/usage` live before each call* — added latency per call (~1-3s), explicitly scoped out under the zero-config + latency constraints.
-**Consequences:** Counter accuracy is local-only — doesn't see calls made via the agy TUI directly or from other tools. Users must manually trigger `/usage` in the agy TUI for the real Google-side number. This is M2's whole purpose: get the real quota in-tool. Not locked as a constraint yet (could be promoted later).
+**Decision:** `agy_usage` emits warnings at 50 calls/day or 200/week but never blocks tool execution.
+**Rationale:** Quota enforcement belongs to Google, not to this extension. A false positive refusal is worse than a quota error from agy itself.
 
 ---
 
-## M0-e: Mirror @agnishc/edb-gemini-proxy conventions (file layout, schemas, no build)
+## M0-e: Mirror @agnishc/edb-gemini-proxy conventions
 
 **Date:** 2026-05-20
-**Context:** User maintains `@agnishc/edb-gemini-proxy` — a Pi extension wrapping the old gemini-cli. It's the in-house pattern for Gemini CLI wrappers in this environment.
-**Decision:** Match its conventions exactly: `src/{index,execute,cli,render,format,types,schemas}.ts` layout, TypeBox schemas as both runtime validators and LLM-facing docs, `peerDependencies` only for `@earendil-works/*` and `@sinclair/typebox`, no build step (Pi loads `.ts` source directly via its own loader), biome strict + tsc strict via `npm run check`. Per-tool `tools/<name>.ts` extracts execute functions to keep `index.ts` thin.
-**Rationale:** User's existing maintained code is the convention. Reduces cognitive load for future maintenance — same shape across Gemini-family extensions. The `pi-extension-author` skill explicitly endorses this pattern.
-**Alternatives considered:**
-- *Invent a new structure tailored to agy's specifics* — needless divergence; benefits don't outweigh inconsistency cost.
-- *Use a published Pi extension template* — none exists yet; would have to author one anyway.
-- *Monorepo (workspaces) from day 1* — overkill for one extension; trivial to migrate later because layout matches edb-gemini-proxy.
-**Consequences:** Future v0.2+ monorepo migration is trivial (file layout already matches). Edits should match edb-gemini-proxy's tab indentation, double quotes (enforced by biome), and section banner comments. Cross-extension refactors become possible when 2+ Gemini wrappers exist.
+**Decision:** Match file layout, TypeBox schemas, peerDependencies-only policy, no build step, biome strict + tsc strict. Per-tool `tools/<name>.ts` files.
+**Rationale:** Consistency with the existing in-house Gemini CLI wrapper pattern.
 
 ---
 
-## M0-f: Positional prompt argument to `agy -p`, not stdin pipe
+## M0-f: Positional prompt argument to `agy -p`, not stdin pipe ~~SUPERSEDED by M1-f~~
 
 **Date:** 2026-05-20
-**Context:** Initial probe showed `agy -p "prompt"` and `echo "prompt" | agy -p` both documented. Empirically, stdin piping failed with `flag needs an argument: -p` — agy's Go flag parser treats `-p` as requiring its argument inline.
-**Decision:** `spawnAgy()` uses `spawn(agyPath, ["-p", prompt, "--dangerously-skip-permissions", "--print-timeout", timeout], { shell: false })` — positional prompt as argv, no shell, no stdin write.
-**Rationale:** Empirically reliable across test runs. `shell: false` + argv-array means no shell injection possible regardless of prompt content. `--dangerously-skip-permissions` is required for headless `-p` mode (interactive permission prompt would block).
-**Alternatives considered:**
-- *Stdin pipe* (`proc.stdin.write(prompt); proc.stdin.end()`) — empirically fails with "flag needs an argument: -p". Not a workable fallback.
-- *Temp-file + `--continue`* — adds I/O, state complexity, and a cleanup path; also `--continue` is for conversation resumption, not initial prompt delivery.
-**Consequences:** Very long prompts (>argv limit ~128KB on Linux) would fail with E2BIG. Not a constraint at current usage (design prompts are typically <10KB including reference files). If we ever hit it (M5 prompt-recipe library could push toward larger contexts), the fix is temp-file + `--continue` workaround.
+**Context:** Stdin piping (`echo "prompt" | agy -p`) fails with "flag needs an argument: -p" — agy's Go flag parser requires the prompt inline.
+**Decision:** `spawn(agyPath, ["-p", prompt, "--dangerously-skip-permissions", "--print-timeout", timeout], { shell: false })`.
+**Rationale:** Empirically reliable. `shell: false` + argv-array prevents shell injection regardless of prompt content.
+**Consequences:** Prompts >~128KB (Linux argv limit) would fail with E2BIG. Not a current constraint.
 
 ---
+
+## M1-f: Prompt via stdin, not `-p` argv argument
+
+**Date:** 2026-05-23
+**Context:** M0-f used `agy -p "<prompt>"` (positional argv). For large prompts (many files inlined, long instructions) this hits the Linux argv limit, producing `E2BIG` on spawn. The original M0-f investigation found stdin pipe failing — but that was `echo | agy -p` with the `-p` flag still present, which requires an inline argument.
+**Decision:** Remove `-p` entirely. Write the prompt to `proc.stdin` and call `proc.stdin.end()`. agy reads from stdin when `-p` is absent. Tested: all four stdin approaches work (pipe, redirect, Node.js `stdin.write`). Cross-platform — pure Node.js stdio, no shell, no temp files.
+**Rationale:** No argv size limit. No temp files. No shell injection surface. Simpler than the original `-p` approach.
+**Alternatives considered:**
+- *Temp file + `--add-dir`* — works but adds I/O, cleanup, and a workspace file the model might confuse with context.
+- *Temp file + `bash -c "agy -p \"$(cat file)\""`* — still puts content on argv via shell expansion, same E2BIG.
+**Consequences:** `spawnAgy()` no longer passes `-p`. `proc.stdin.end()` is called immediately after `proc.stdin.write(prompt)`. Decision M0-f superseded.
+
+---
+
+## M1-a: Replace specialized tools with one generic `agy` tool
+
+**Date:** 2026-05-23
+**Context:** The original 5 tools (design, critique, image_to_ui, usage, account) grew to 8 after adding ask, review, imagine. Each specialized tool prepended a canned system prompt. The user pointed out this is just a prompt library — the caller can write better prompts themselves.
+**Decision:** Remove all specialized tools except `agy_image` (different mechanism) and the two utilities (`agy_usage`, `agy_account`). Replace with one `agy` tool that sends the prompt verbatim, plus optional `contextFiles` for file injection.
+**Rationale:** Fewer tools = less LLM confusion. The caller writes the system prompt they actually want. No hidden prompt engineering inside the extension.
+**Alternatives considered:**
+- *Keep specialized tools as optional* — two APIs to maintain, inconsistent behavior.
+- *Make system prompts configurable* — adds complexity, still opinionated defaults.
+**Consequences:** Callers must write their own system prompts. `prompts.ts` deleted.
+
+---
+
+## M1-b: Dynamic model detection via one-time probe
+
+**Date:** 2026-05-23
+**Context:** M0-b hardcoded `"gemini-3.5-flash-high"` in tool details. This is wrong whenever the user has selected a different model in the agy TUI. No config file or flag exposes the active model.
+**Decision:** `src/model.ts` — on first tool call per Pi session, fire a cheap agy probe in parallel with the real call ("what model are you?"). Cache result in module-level variables. All tool `details.model` fields use `getCachedModel()`.
+**Rationale:** The probe (~2–4s) completes before any real call (~10–30s) finishes, so there is zero net latency cost. `normalise()` handles Gemini's free-text replies into compact model IDs.
+**Alternatives considered:**
+- *Parse `~/.gemini/` config files* — model selection is not stored in any JSON file; it lives in protobuf conversation state.
+- *Keep hardcoded string* — actively misleads the user.
+- *Persist to disk* — stale if the user changes model between Pi sessions.
+**Consequences:** First call in a new Pi session fires two agy processes concurrently. `resetModelCache()` is available for future use (e.g. after account switch).
+
+---
+
+## M1-d: `contextDir` parameter uses `--add-dir`; `contextFiles` inlines content
+
+**Date:** 2026-05-23
+**Context:** Passing many files via `contextFiles` inlines all content into the prompt argv string. Linux argv limit is ~128KB — a 14-file security audit hit `E2BIG`.
+**Decision:** Add `contextDir: string` parameter to `agy`. Passed directly as `--add-dir` to agy; agy makes all files in the directory available to Gemini via workspace. `contextFiles` stays for 1–3 targeted files where inline injection is intentional.
+**Rationale:** `--add-dir` bypasses argv entirely — no size limit. Gemini reads files from the workspace on demand.
+**Consequences:** Callers should prefer `contextDir` for any multi-file task. `contextFiles` is now explicitly scoped to small targeted use.
+
+---
+
+## M1-e: Dynamic timeout estimation in promptGuidelines
+
+**Date:** 2026-05-23
+**Context:** Default 90s timeout caused `timed out waiting for response` on a 14-file security audit. A hardcoded upper bound (e.g. "use 300+") anchors the model to that number instead of reasoning from task size.
+**Decision:** Remove hardcoded upper bound. Replace with a formula in `promptGuidelines`: `120s baseline + ~15s per contextFiles file + ~30s per 10 files in contextDir`, doubled for deep analysis. Explicit note that agy FREE/PRO tiers can be 3–5× slower.
+**Rationale:** The model has enough context to estimate task size. A formula produces better estimates than a fixed ceiling across varying task sizes.
+**Consequences:** Opus should always pass `timeoutSec` explicitly. Default raised to 120s as a safer baseline.
+
+---
+
+## M1-c: `agy_image` uses isolated temp dir for `--add-dir`
+
+**Date:** 2026-05-23
+**Context:** `--add-dir` adds an entire directory to agy's workspace. Passing `path.dirname(imagePath)` exposes all files in the image's parent directory to Gemini — could be the project root with thousands of files.
+**Decision:** Copy the image to `os.tmpdir()/agy-img-XXXXX/`, pass that as `--add-dir`. Clean up the temp dir after the call.
+**Rationale:** Gemini sees exactly one file. No accidental context leakage. Cleanup is safe — the original image is untouched; only the temp copy is deleted.
+**Alternatives considered:**
+- *Pass parent dir directly* — leaks unrelated files into Gemini's context; slow on large directories.
+- *Symlink instead of copy* — same exposure problem.
+**Consequences:** Small I/O overhead for the copy. Temp dir created in `os.tmpdir()` so cleanup failure doesn't pollute the project.

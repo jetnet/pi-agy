@@ -1,88 +1,117 @@
 # pi-agy
 
-**Pi extension: delegate design tasks to Google Antigravity CLI (agy / Gemini 3.5 Flash).**
-
-Registers 5 tools that let the Pi agent offload UI/UX work to Gemini Flash 3.5 —
-which excels at Tailwind/React component generation, design critique, and image-to-code.
-
-## Why
-
-Gemini Flash 3.5 produces excellent one-shot Tailwind/React output with accessible,
-polished defaults — measured during real use at 30-90s per design prompt.
+Pi extension that wraps Google's Antigravity CLI (`agy`) as native LLM-callable tools. Opus delegates tasks to Gemini Flash without thinking about CLI flags, model selection, or account state.
 
 ## Requirements
 
-- `agy` 1.0.0+ on PATH (install: see [antigravity.google](https://antigravity.google/))
-- Logged in to a Google account (`agy` interactive session with OAuth)
-- At least one model selection done in the agy TUI: `/model` → "Gemini 3.5 Flash (High)"
+- `agy` on PATH (Google Antigravity CLI)
+- Logged in once via `agy` TUI (OAuth)
+- Model selected via `agy` TUI `/model` (inherited by all `-p` calls)
 
 ## Installation
 
-```bash
-pi install path:/home/quzma/.pi/agent/extensions/pi-agy
+Add to `~/.pi/agent/settings.json`:
+
+```json
+{
+  "packages": ["../../src/pi-agy"]
+}
 ```
 
-Or symlink the directory if already present.
+Or symlink into the global extensions directory:
+
+```bash
+ln -s ~/src/pi-agy ~/.pi/agent/extensions/pi-agy
+```
+
+Then `/reload` in Pi or start a new session.
 
 ## Tools
 
-### `agy_design`
-Generate UI components. Best for Tailwind+React scaffolding.
+### `agy`
+
+Send any prompt to Gemini. Write it however you like — nothing is added by the extension.
 
 ```
-Input: { prompt, framework?, referenceFiles?, outputFormat?, cwd?, timeoutSec? }
+prompt:        "You are a senior security engineer. Review this code for injection vulnerabilities..."
+contextFiles:  ["src/auth.ts", "src/middleware.ts"]   # 1–3 targeted files, injected as <file> blocks
+contextDir:    "src"                                   # whole directory via --add-dir, no size limit
+timeoutSec:    240                                     # always set explicitly — see Timeout guidance below
 ```
 
-### `agy_critique`
-Review existing UI code for design/UX issues.
+**`contextFiles` vs `contextDir`**
+
+| | `contextFiles` | `contextDir` |
+|---|---|---|
+| Mechanism | file contents inlined in prompt via stdin | `--add-dir` → agy workspace |
+| Size limit | none (stdin, not argv) | none |
+| Use for | 1–3 targeted files | whole dirs, many files |
+
+### `agy_image`
+
+Send a prompt + image file to Gemini (PNG, JPG, WebP, GIF).
 
 ```
-Input: { targetFile, focus?, question?, cwd?, timeoutSec? }
+imagePath:  "screenshots/mockup.png"
+prompt:     "Convert this to a React + Tailwind component"
+timeoutSec: 120   # optional, default 120
 ```
 
-### `agy_image_to_ui`
-Convert a mockup/screenshot to component code (best-effort via `--add-dir`).
-
-```
-Input: { imagePath, framework?, fidelity?, additionalNotes?, cwd?, timeoutSec? }
-```
+The image is copied to an isolated temp directory before passing to agy, so only the target file is exposed to Gemini.
 
 ### `agy_usage`
-Show local request counter with soft-warn thresholds.
+
+Show the local call counter.
 
 ```
-Input: { window?, account? }
+window:  "today" | "week" | "month" | "all"   # optional, default "week"
+account: "work"                                # optional, filter by profile
 ```
+
+Soft-warns at 50 calls/day or 200/week. Never blocks calls. Counter is local only — does not reflect Google's server-side quota.
 
 ### `agy_account`
-Switch Google accounts by swapping `~/.gemini/` state from backed-up profiles.
+
+Manage Google accounts by swapping `~/.gemini/` credentials.
 
 ```
-Input: { action, profile? }
+action:  "list" | "current" | "backup" | "switch"
+profile: "work"   # required for backup/switch
 ```
+
+Always back up before the first switch:
+```
+action: backup  profile: work
+action: backup  profile: personal
+action: switch  profile: work
+```
+
+## Timeout guidance
+
+Always set `timeoutSec` explicitly — the default (120s) is only safe for simple one-shot questions.
+
+**Estimate:** `120 + (files × 15)` seconds, then double for deep analysis tasks.
+
+| Task | Files | Estimate |
+|------|-------|----------|
+| Quick question | 0 | 120s |
+| Small code review | 3 | ~165s |
+| Security audit, 10 files | 10 | ~420s |
+| Full directory audit | 20+ | 600s+ |
+
+> **agy FREE / PRO tiers can be 3–5× slower.** When in doubt, be generous — agy returns as soon as it's done regardless of the timeout value.
 
 ## Limitations
 
-- **Model selection is TUI-controlled.** There is no `-m` flag. Change model via `/model` in agy TUI.
-- **No streaming.** `agy -p` produces plain text only (no JSON/stream output format).
-- **Account switching is sequential**, not parallel. Running agy sessions keep their loaded creds.
-- **Image input** uses `--add-dir` workaround. agy may not reliably read images in print mode.
-- **Local counter only.** `agy_usage` tracks pi-agy calls. Cross-source Google quota requires `/usage` in agy TUI.
+- **Model selection** — `agy -m` is silently ignored in agy 1.0.0. Set the model once via `agy` TUI `/model`. The extension detects the active model via a one-time probe on first call per session.
+- **No streaming** — `agy -p` returns output only on completion.
+- **Image generation** — not supported; `agy -p` is text-only.
+- **Running agy sessions** — retain their loaded credentials until restarted after an account switch.
 
-## Quota guidance
+## Development
 
-pi-agy soft-warns at 50 calls/day or 200/week but **never refuses calls**.
-Warnings are informational — check actual quota with `/usage` in the agy TUI.
+```bash
+npm run check   # biome lint + tsc --noEmit
+```
 
-## Troubleshooting
-
-| Symptom | Fix |
-|---------|-----|
-| "agy not found" | Set `AGY_PATH` env var to the binary path |
-| Wrong model | Run `agy` TUI, `/model`, select "Gemini 3.5 Flash (High)", exit |
-| Image input not working | Open agy TUI directly (`agy -i`) and drag the image in |
-| Account switch not taking effect | Close any running agy sessions first |
-
-## License
-
-MIT
+No build step — Pi loads `.ts` source directly.

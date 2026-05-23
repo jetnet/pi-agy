@@ -2,20 +2,19 @@
 
 ## Currently working on
 
-### M1 — Discoverability tuning: Opus reaches for `agy_design` ≥2/3 design-shaped requests, no manual nudging
-
-- [ ] Refine each tool's `promptSnippet` and `promptGuidelines` based on observed Opus behavior after a week of real usage
-- [ ] Add 2–3 concrete dispatch examples to `~/.pi/agent/AGENTS.md`'s pi-agy delegation rule (e.g., "User: 'build me a hero section' → Opus: `agy_design`")
-- [ ] Run a discoverability probe: dispatch 3 design-shaped requests in fresh pi sessions, log which got routed to `agy_design` vs Opus writing Tailwind itself
-- [ ] Track "I should have used agy_design here" observations in `watch.md` as discoverability signals
-- [ ] Decide on success criterion before measurement (≥2/3 is the current target — confirm or revise)
+Nothing — M1 just closed.
 
 ## Next up
 
-### M2 — True `/usage` cross-source: pi-agy knows the real Google-side weekly quota, not just the local counter
+### M2 — True usage cross-source
+Surface the real Google-side weekly quota instead of (or alongside) the local counter.
+Options: TUI scrape, live API probe, or just linking to the agy TUI `/usage` command clearly in the tool output.
 
-(Sub-tasks defined when M1 closes.)
+### M3 — Account switching reliability
+Round-trip test: backup two accounts, switch between them, verify no credential corruption.
+Prerequisite: user has two Google accounts configured in agy.
 
 ## Done
 
-- **M0** (2026-05-20, session-log/2026-05-20-001.md) — Shipped 5 tools (`agy_design`/`critique`/`image_to_ui`/`usage`/`account`) + spawnAgy abstraction + profile-based account swap + local usage counter; hardened via adversarial review (P0 path traversal + TOCTOU fixed, all P1s + P2.1 fixed); 3 git commits as v0.1.0, v0.1.1, v0.1.2.
+- **M0** — 5 tools shipped with security hardening (path traversal, TOCTOU, file mode, abort cleanup). 2026-05-20.
+- **M1** — Simplified to 4 tools (`agy`, `agy_image`, `agy_usage`, `agy_account`). Removed all specialized prompt modes. Added dynamic model detection (`src/model.ts`). Fixed `agy_image` temp dir isolation. 2026-05-23.
