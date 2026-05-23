@@ -2,7 +2,7 @@
 	"name": "pi-agy",
 	"private": true,
 	"version": "0.1.0",
-	"description": "Pi extension: delegate design tasks to Google Antigravity CLI (agy / Gemini 3.5 Flash)",
+	"description": "Pi extension wrapping Google Antigravity CLI (agy): send any prompt to Gemini with optional file or directory context",
 	"type": "module",
 	"license": "MIT",
 	"files": [
