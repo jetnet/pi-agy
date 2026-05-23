@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { findAgyCli } from "./cli";
 import type { SpawnAgyOptions, SpawnAgyResult } from "./types";
 
-// ── Execute agy -p ─────────────────────────────────────────────────────────────
+// ── Execute agy via stdin (no -p flag — avoids argv size limits) ────────────────
 
 const NOISE_PREFIXES = ["Loaded cached credentials", "Skill ", "antigravity-cli"];
 
@@ -17,7 +17,7 @@ export function spawnAgy(prompt: string, opts: SpawnAgyOptions): Promise<SpawnAg
 		const agyPath = findAgyCli();
 		const timeoutStr = `${opts.timeoutSec}s`;
 
-		const args: string[] = ["-p", prompt, "--dangerously-skip-permissions", "--print-timeout", timeoutStr];
+		const args: string[] = ["--dangerously-skip-permissions", "--print-timeout", timeoutStr];
 		if (opts.addDirs && opts.addDirs.length > 0) {
 			for (const dir of opts.addDirs) {
 				args.push("--add-dir", dir);
@@ -33,6 +33,7 @@ export function spawnAgy(prompt: string, opts: SpawnAgyOptions): Promise<SpawnAg
 			stdio: ["pipe", "pipe", "pipe"],
 			env: { ...process.env },
 		});
+		proc.stdin.write(prompt, "utf-8");
 		proc.stdin.end();
 
 		let stdout = "";
