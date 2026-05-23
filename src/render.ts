@@ -4,40 +4,36 @@ import type { AgyToolDetails } from "./types";
 
 // ── TUI rendering ──────────────────────────────────────────────────────────────
 
-function getToolLabel(args: any): string {
-	if (args.focus) return "agy_critique";
-	if (args.imagePath) return "agy_image_to_ui";
-	if (args.action) return "agy_account";
-	if (args.window) return "agy_usage";
-	if (args.prompt) return "agy_design";
-	return "agy_tool";
-}
-
 /** Shared renderCall for all agy tools. */
 export function renderCall(args: any, theme: any): any {
-	const toolName = getToolLabel(args);
-	const modelLabel = "flash-3.5-high";
+	const toolName: string = args.imagePath
+		? "agy_image"
+		: args.action
+			? "agy_account"
+			: args.window
+				? "agy_usage"
+				: "agy";
+	const model = args.action || args.window ? "" : theme.fg("accent", `[${args._model ?? "gemini"}]`);
 
-	let text = theme.fg("toolTitle", theme.bold(`\u26a1 ${toolName} `)) + theme.fg("accent", `[${modelLabel}]`);
+	let text = theme.fg("toolTitle", theme.bold(`⚡ ${toolName} `)) + model;
 
-	// For prompt tools, show the prompt preview
 	if (args.prompt) {
-		const prompt = String(args.prompt ?? "");
-		const preview = prompt.length > 80 ? `${prompt.slice(0, 80)}\u2026` : prompt;
+		const preview = args.prompt.length > 80 ? `${args.prompt.slice(0, 80)}…` : args.prompt;
 		text += `\n  ${theme.fg("dim", preview)}`;
 	}
 
-	// For critique, show the target file
-	if (args.targetFile) {
-		text += `\n  ${theme.fg("muted", "file: ")}${theme.fg("dim", args.targetFile)}`;
-	}
-
-	// For image_to_ui, show the image path
 	if (args.imagePath) {
 		text += `\n  ${theme.fg("muted", "image: ")}${theme.fg("dim", args.imagePath)}`;
 	}
 
-	// For account, show the action
+	if (args.contextDir) {
+		text += `\n  ${theme.fg("muted", "dir: ")}${theme.fg("dim", args.contextDir)}`;
+	}
+
+	if (args.contextFiles?.length > 0) {
+		text += `\n  ${theme.fg("muted", "files: ")}${theme.fg("dim", args.contextFiles.join(", "))}`;
+	}
+
 	if (args.action) {
 		text += `\n  ${theme.fg("muted", "action: ")}${theme.fg("accent", args.action)}`;
 		if (args.profile) text += `  ${theme.fg("dim", args.profile)}`;
@@ -59,16 +55,16 @@ export function renderResult(result: any, { expanded }: any, theme: any): any {
 
 	if (result.isError) {
 		return new Text(
-			theme.fg("error", "\u2717 ") +
+			theme.fg("error", "✗ ") +
 				theme.fg("toolTitle", theme.bold("Agy")) +
 				meta +
-				`\n${theme.fg("error", text.length > 500 ? `${text.slice(0, 500)}\u2026` : text)}`,
+				`\n${theme.fg("error", text.length > 500 ? `${text.slice(0, 500)}…` : text)}`,
 			0,
 			0,
 		);
 	}
 
-	const icon = theme.fg("success", "\u2713");
+	const icon = theme.fg("success", "✓");
 	const headerLine = `${icon} ${theme.fg("toolTitle", theme.bold("Agy"))}${meta}`;
 
 	if (expanded) {
@@ -77,15 +73,14 @@ export function renderResult(result: any, { expanded }: any, theme: any): any {
 		container.addChild(new Text(headerLine, 0, 0));
 		if (text) {
 			container.addChild(new Spacer(1));
-			container.addChild(new Text(theme.fg("muted", "\u2500\u2500\u2500 Response \u2500\u2500\u2500"), 0, 0));
+			container.addChild(new Text(theme.fg("muted", "─── Response ───"), 0, 0));
 			container.addChild(new Markdown(text.trim(), 0, 0, mdTheme));
 		}
 		return container;
 	}
 
-	// Collapsed view
 	const previewLines = text.split("\n").slice(0, 6);
-	const previewText = previewLines.join("\n") + (text.split("\n").length > 6 ? "\n\u2026" : "");
+	const previewText = previewLines.join("\n") + (text.split("\n").length > 6 ? "\n…" : "");
 
 	let out = headerLine;
 	if (text) out += `\n${theme.fg("toolOutput", previewText)}`;

@@ -2,27 +2,25 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { getCurrentAccount } from "../accounts";
 import { spawnAgy } from "../execute";
-import { designSystemPrompt } from "../prompts";
+import { getCachedModel, probeActiveModel } from "../model";
 import type { AgyToolDetails, SpawnAgyResult } from "../types";
 import { logCall } from "../usage";
 
-export async function executeDesign(
+export async function executeAgy(
 	params: any,
 	signal: AbortSignal | undefined,
 	onUpdate: any,
 	ctx: any,
 ): Promise<{ content: Array<{ type: string; text: string }>; details: AgyToolDetails; isError: boolean }> {
 	const workDir = params.cwd ?? ctx.cwd;
-	const framework = params.framework ?? "react-tailwind";
-	const outputFormat = params.outputFormat ?? "code-only";
+	probeActiveModel(workDir);
 	const timeoutSec = params.timeoutSec ?? 120;
 
 	const parts: string[] = [];
 
-	parts.push(designSystemPrompt(framework, outputFormat));
-
-	if (params.referenceFiles?.length > 0) {
-		for (const filePath of params.referenceFiles) {
+	// Inject context files
+	if (params.contextFiles?.length > 0) {
+		for (const filePath of params.contextFiles) {
 			const absPath = path.isAbsolute(filePath) ? filePath : path.join(workDir, filePath);
 			try {
 				const content = await fs.promises.readFile(absPath, "utf-8");
@@ -37,41 +35,40 @@ export async function executeDesign(
 
 	const finalPrompt = parts.join("\n\n");
 
+	// contextDir → --add-dir (agy reads files directly, no argv size limit)
+	const addDirs: string[] = [];
+	if (params.contextDir) {
+		const absDir = path.isAbsolute(params.contextDir) ? params.contextDir : path.join(workDir, params.contextDir);
+		addDirs.push(absDir);
+	}
+
 	const result: SpawnAgyResult = await spawnAgy(finalPrompt, {
 		cwd: workDir,
 		timeoutSec,
+		addDirs: addDirs.length > 0 ? addDirs : undefined,
 		signal,
 		onProgress: onUpdate
 			? (status: string) => onUpdate({ content: [{ type: "text" as const, text: status }] })
 			: undefined,
 	});
 
-	// Post-process: strip markdown fences for code-only
-	let text = result.text;
-	if (outputFormat === "code-only") {
-		text = text
-			.replace(/^```[\w-]*\n/gm, "")
-			.replace(/^```\n?/gm, "")
-			.trim();
-	}
-
 	const account = getCurrentAccount();
 	await logCall({
 		ts: new Date().toISOString(),
-		tool: "agy_design",
+		tool: "agy",
 		account,
 		latencyMs: result.durationMs,
 		promptChars: finalPrompt.length,
-		responseChars: text.length,
+		responseChars: result.text.length,
 		exitCode: result.exitCode,
 	});
 
 	const isError = result.isError;
-	const responseText = isError && !text ? result.stderr || "(agy exited with no output)" : text;
+	const responseText = isError && !result.text ? result.stderr || "(agy exited with no output)" : result.text;
 
 	return {
 		content: [{ type: "text", text: responseText }],
-		details: { durationMs: result.durationMs, account, exitCode: result.exitCode, model: "gemini-3.5-flash-high" },
+		details: { durationMs: result.durationMs, account, exitCode: result.exitCode, model: getCachedModel() },
 		isError,
 	};
 }
