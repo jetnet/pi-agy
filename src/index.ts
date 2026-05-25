@@ -53,7 +53,7 @@ export default function piAgyExtension(pi: ExtensionAPI): void {
 			"Pass model to override the active model for one call (e.g. 'Gemini 3.1 Pro (High)'). " +
 				"Omit to use whatever is configured in the agy TUI. The override is temporary — the original model is restored after the call.",
 			"When agy generates images, the file paths appear in the response under 'Generated images:'. " +
-				"Use those paths with telegram_attach or read to show the image to the user.",
+				"Use those paths with read to show the image to the user.",
 		],
 		parameters: AgyParams,
 		async execute(_toolCallId, params, signal, onUpdate, ctx) {
