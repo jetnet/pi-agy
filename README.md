@@ -33,10 +33,11 @@ Then `/reload` in Pi or start a new session.
 Send any prompt to Gemini. Write it however you like — nothing is added by the extension.
 
 ```
-prompt:        "You are a senior security engineer. Review this code for injection vulnerabilities..."
-contextFiles:  ["src/auth.ts", "src/middleware.ts"]   # 1–3 targeted files, injected as <file> blocks
-contextDir:    "src"                                   # whole directory via --add-dir, no size limit
-timeoutSec:    240                                     # always set explicitly — see Timeout guidance below
+prompt:          "You are a senior security engineer. Review this code for injection vulnerabilities..."
+contextFiles:    ["src/auth.ts", "src/middleware.ts"]   # 1–3 targeted files, injected as <file> blocks
+contextDir:      "src"                                  # whole directory via --add-dir, no size limit
+timeoutSec:      240                                    # always set explicitly — see Timeout guidance below
+conversationId:  "e973694d-85e4-..."                     # optional: resume a specific conversation
 ```
 
 **`contextFiles` vs `contextDir`**
@@ -58,6 +59,8 @@ timeoutSec: 120   # optional, default 120
 ```
 
 The image is copied to an isolated temp directory before passing to agy, so only the target file is exposed to Gemini.
+
+Also supports `conversationId` for continuing a prior conversation.
 
 ### `agy_usage`
 
@@ -86,6 +89,61 @@ action: backup  profile: personal
 action: switch  profile: work
 ```
 
+## Conversation continuation
+
+Each pi session gets its own agy conversation. Gemini retains full context from prior `agy` and `agy_image` calls within the same session — no need to re-explain what you're working on.
+
+Multiple pi sessions sharing the same working directory are fully isolated: each talks to its own Gemini conversation.
+
+| `conversationId` | Behavior |
+|---|---|
+| _(omitted)_ | Auto-continue this pi session's conversation |
+| `"<uuid>"` | Resume a specific conversation by ID |
+| `"new"` | Force a fresh conversation (no prior context) |
+
+The conversation UUID is returned in `details.conversationId` on every response, so you can store it and pass it back later.
+
+### New session (no mapping yet)
+
+```mermaid
+sequenceDiagram
+    participant Pi as Pi (Opus)
+    participant Ext as pi-agy
+    participant Map as agy-sessions.json
+    participant Agy as agy CLI
+    participant Cache as last_conversations.json
+
+    Pi->>Ext: agy(prompt)
+    Ext->>Map: lookup piSessionId
+    Map-->>Ext: (not found)
+    Ext->>Agy: spawn agy (no --conversation)
+    Agy-->>Ext: response text
+    Ext->>Cache: read cwd → agyConvId
+    Cache-->>Ext: "a1b2c3d4-..."
+    Ext->>Map: store piSessionId → "a1b2c3d4-..."
+    Ext-->>Pi: response + details.conversationId
+```
+
+### Continue (mapping exists)
+
+```mermaid
+sequenceDiagram
+    participant Pi as Pi (Opus)
+    participant Ext as pi-agy
+    participant Map as agy-sessions.json
+    participant Agy as agy CLI
+
+    Pi->>Ext: agy(prompt)
+    Ext->>Map: lookup piSessionId
+    Map-->>Ext: "a1b2c3d4-..."
+    Ext->>Agy: spawn agy --conversation a1b2c3d4-...
+    Note right of Agy: Gemini has full<br/>prior context
+    Agy-->>Ext: response text
+    Ext-->>Pi: response + details.conversationId
+```
+
+The mapping in `~/.pi/agy-sessions.json` survives pi restarts, so resumed sessions pick up where they left off. Stale entries are pruned on extension load.
+
 ## Timeout guidance
 
 Always set `timeoutSec` explicitly — the default (120s) is only safe for simple one-shot questions.
@@ -107,6 +165,7 @@ Always set `timeoutSec` explicitly — the default (120s) is only safe for simpl
 - **No streaming** — `agy -p` returns output only on completion.
 - **Image generation** — not supported; `agy -p` is text-only.
 - **Running agy sessions** — retain their loaded credentials until restarted after an account switch.
+- **Conversation auto-continue** — session mapping relies on `~/.pi/agy-sessions.json` (pi→agy) and `~/.gemini/antigravity-cli/cache/last_conversations.json` (first-call discovery). If either is unavailable, each call starts a fresh conversation (graceful degradation).
 
 ## Development
 

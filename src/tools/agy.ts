@@ -3,6 +3,7 @@ import * as path from "node:path";
 import { getCurrentAccount } from "../accounts";
 import { spawnAgy } from "../execute";
 import { getCachedModel, probeActiveModel } from "../model";
+import { afterAgyCall, resolveConversationId } from "../session";
 import type { AgyToolDetails, SpawnAgyResult } from "../types";
 import { logCall } from "../usage";
 
@@ -16,9 +17,10 @@ export async function executeAgy(
 	probeActiveModel(workDir);
 	const timeoutSec = params.timeoutSec ?? 120;
 
+	const piSessionId: string = ctx.sessionManager?.getSessionId?.() ?? "unknown";
+
 	const parts: string[] = [];
 
-	// Inject context files
 	if (params.contextFiles?.length > 0) {
 		for (const filePath of params.contextFiles) {
 			const absPath = path.isAbsolute(filePath) ? filePath : path.join(workDir, filePath);
@@ -32,20 +34,21 @@ export async function executeAgy(
 	}
 
 	parts.push(params.prompt);
-
 	const finalPrompt = parts.join("\n\n");
 
-	// contextDir → --add-dir (agy reads files directly, no argv size limit)
 	const addDirs: string[] = [];
 	if (params.contextDir) {
 		const absDir = path.isAbsolute(params.contextDir) ? params.contextDir : path.join(workDir, params.contextDir);
 		addDirs.push(absDir);
 	}
 
+	const conversationId = resolveConversationId(params.conversationId, piSessionId);
+
 	const result: SpawnAgyResult = await spawnAgy(finalPrompt, {
 		cwd: workDir,
 		timeoutSec,
 		addDirs: addDirs.length > 0 ? addDirs : undefined,
+		conversationId,
 		signal,
 		onProgress: onUpdate
 			? (status: string) => onUpdate({ content: [{ type: "text" as const, text: status }] })
@@ -63,12 +66,20 @@ export async function executeAgy(
 		exitCode: result.exitCode,
 	});
 
+	const finalConversationId = afterAgyCall(piSessionId, conversationId, workDir);
+
 	const isError = result.isError;
 	const responseText = isError && !result.text ? result.stderr || "(agy exited with no output)" : result.text;
 
 	return {
 		content: [{ type: "text", text: responseText }],
-		details: { durationMs: result.durationMs, account, exitCode: result.exitCode, model: getCachedModel() },
+		details: {
+			durationMs: result.durationMs,
+			account,
+			exitCode: result.exitCode,
+			model: getCachedModel(),
+			conversationId: finalConversationId,
+		},
 		isError,
 	};
 }

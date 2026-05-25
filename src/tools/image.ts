@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { getCurrentAccount } from "../accounts";
 import { spawnAgy } from "../execute";
 import { getCachedModel, probeActiveModel } from "../model";
+import { afterAgyCall, resolveConversationId } from "../session";
 import type { AgyToolDetails, SpawnAgyResult } from "../types";
 import { logCall } from "../usage";
 
@@ -18,6 +19,8 @@ export async function executeImage(
 	const workDir = params.cwd ?? ctx.cwd;
 	probeActiveModel(workDir);
 	const timeoutSec = params.timeoutSec ?? 120;
+
+	const piSessionId: string = ctx.sessionManager?.getSessionId?.() ?? "unknown";
 
 	const absPath = path.isAbsolute(params.imagePath) ? params.imagePath : path.join(workDir, params.imagePath);
 
@@ -42,8 +45,6 @@ export async function executeImage(
 		};
 	}
 
-	// Copy image to an isolated temp dir so --add-dir doesn't expose the
-	// entire source directory (which could be large or contain sensitive files).
 	const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "agy-img-"));
 	const tmpImage = path.join(tmpDir, path.basename(absPath));
 	try {
@@ -59,17 +60,19 @@ export async function executeImage(
 
 	const finalPrompt = `Image file: ${tmpImage}\n\n${params.prompt}`;
 
+	const conversationId = resolveConversationId(params.conversationId, piSessionId);
+
 	const result: SpawnAgyResult = await spawnAgy(finalPrompt, {
 		cwd: workDir,
 		timeoutSec,
 		addDirs: [tmpDir],
+		conversationId,
 		signal,
 		onProgress: onUpdate
 			? (status: string) => onUpdate({ content: [{ type: "text" as const, text: status }] })
 			: undefined,
 	});
 
-	// Clean up temp dir regardless of outcome
 	await fs.promises.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
 
 	const account = getCurrentAccount();
@@ -83,12 +86,20 @@ export async function executeImage(
 		exitCode: result.exitCode,
 	});
 
+	const finalConversationId = afterAgyCall(piSessionId, conversationId, workDir);
+
 	const isError = result.isError;
 	const responseText = isError && !result.text ? result.stderr || "(agy exited with no output)" : result.text;
 
 	return {
 		content: [{ type: "text", text: responseText }],
-		details: { durationMs: result.durationMs, account, exitCode: result.exitCode, model: getCachedModel() },
+		details: {
+			durationMs: result.durationMs,
+			account,
+			exitCode: result.exitCode,
+			model: getCachedModel(),
+			conversationId: finalConversationId,
+		},
 		isError,
 	};
 }

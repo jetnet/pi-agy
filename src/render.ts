@@ -51,6 +51,7 @@ export function renderResult(result: any, { expanded }: any, theme: any): any {
 	if (details?.model) metaParts.push(details.model);
 	if (details?.durationMs) metaParts.push(`${(details.durationMs / 1000).toFixed(1)}s`);
 	if (details?.account) metaParts.push(details.account);
+	if (details?.conversationId) metaParts.push(`conv:${details.conversationId.slice(0, 8)}`);
 	const meta = metaParts.length ? `  ${metaParts.map((p) => theme.fg("dim", p)).join("  ")}` : "";
 
 	if (result.isError) {

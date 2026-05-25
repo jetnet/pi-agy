@@ -28,6 +28,14 @@ export const AgyParams = Type.Object({
 				"agy FREE/PRO tiers can be slow — be generous.",
 		}),
 	),
+	conversationId: Type.Optional(
+		Type.String({
+			description:
+				"Resume a previous agy conversation by ID (UUID). " +
+				"When set, passes --conversation to the agy CLI so Gemini has full prior context. " +
+				"Omit to auto-continue the last conversation for the working directory, or set to 'new' to force a fresh conversation.",
+		}),
+	),
 });
 
 // ── agy_image ──────────────────────────────────────────────────────────────────
@@ -42,6 +50,14 @@ export const ImageParams = Type.Object({
 	cwd: Type.Optional(Type.String({ description: "Working directory for agy. Defaults to Pi's cwd." })),
 	timeoutSec: Type.Optional(
 		Type.Number({ description: "Max seconds to wait. Default 120. agy FREE/PRO tiers can be slow — be generous." }),
+	),
+	conversationId: Type.Optional(
+		Type.String({
+			description:
+				"Resume a previous agy conversation by ID (UUID). " +
+				"When set, passes --conversation to the agy CLI so Gemini has full prior context. " +
+				"Omit to auto-continue the last conversation for the working directory, or set to 'new' to force a fresh conversation.",
+		}),
 	),
 });
 

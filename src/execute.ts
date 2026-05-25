@@ -18,6 +18,9 @@ export function spawnAgy(prompt: string, opts: SpawnAgyOptions): Promise<SpawnAg
 		const timeoutStr = `${opts.timeoutSec}s`;
 
 		const args: string[] = ["--dangerously-skip-permissions", "--print-timeout", timeoutStr];
+		if (opts.conversationId) {
+			args.push("--conversation", opts.conversationId);
+		}
 		if (opts.addDirs && opts.addDirs.length > 0) {
 			for (const dir of opts.addDirs) {
 				args.push("--add-dir", dir);

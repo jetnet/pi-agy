@@ -4,6 +4,7 @@ export interface SpawnAgyOptions {
 	cwd: string;
 	timeoutSec: number;
 	addDirs?: string[];
+	conversationId?: string;
 	signal?: AbortSignal;
 	onProgress?: (status: string) => void;
 }
@@ -47,4 +48,5 @@ export interface AgyToolDetails {
 	account: string | null;
 	exitCode: number;
 	model?: string;
+	conversationId?: string;
 }

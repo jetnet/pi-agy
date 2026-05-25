@@ -15,12 +15,19 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { renderCall, renderResult } from "./render";
 import { AccountParams, AgyParams, ImageParams, UsageParams } from "./schemas";
+import { pruneSessionMap } from "./session";
 import { executeAccount } from "./tools/account";
 import { executeAgy } from "./tools/agy";
 import { executeImage } from "./tools/image";
 import { executeUsage } from "./tools/usage";
 
 export default function piAgyExtension(pi: ExtensionAPI): void {
+	// Housekeeping: prune stale pi→agy session mappings on load
+	try {
+		pruneSessionMap();
+	} catch {
+		// Non-fatal
+	}
 	// ── Tool: agy ───────────────────────────────────────────────────────
 	pi.registerTool({
 		name: "agy",
@@ -28,7 +35,8 @@ export default function piAgyExtension(pi: ExtensionAPI): void {
 		description:
 			"Send any prompt to Gemini via the agy CLI. " +
 			"Use contextFiles to inject file contents into the prompt. " +
-			"Write the prompt however you like — no restrictions on format or content.",
+			"Write the prompt however you like — no restrictions on format or content. " +
+			"Conversations auto-continue by default; pass conversationId to target a specific session or 'new' for a fresh one.",
 		promptSnippet: "Ask Gemini — delegates any question, task, or generation request to Gemini via agy",
 		promptGuidelines: [
 			"Use agy when the user wants to delegate a task to Gemini Flash.",
@@ -39,6 +47,10 @@ export default function piAgyExtension(pi: ExtensionAPI): void {
 				"Estimate: 120s baseline + ~15s per file for contextFiles + ~30s per 10 files estimated in contextDir. " +
 				"Double the estimate for deep analysis tasks (security audit, architecture review). " +
 				"agy FREE/PRO tiers can be 3–5x slower than expected — when in doubt, be generous.",
+			"Conversations auto-continue: each pi session gets its own agy conversation. " +
+				"Gemini retains full context from prior calls within the same session. " +
+				"Pass conversationId='new' to force a fresh conversation. " +
+				"The response includes the conversationId in details for chaining.",
 		],
 		parameters: AgyParams,
 		async execute(_toolCallId, params, signal, onUpdate, ctx) {

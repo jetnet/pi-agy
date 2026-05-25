@@ -4,3 +4,5 @@ dist/
 .pi/tmp/
 accounts/
 .antigravitycli/
+# Local Pi runtime state
+.atl/
