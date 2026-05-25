@@ -191,6 +191,37 @@ sequenceDiagram
 
 The mapping in `~/.pi/agy-sessions.json` survives pi restarts, so resumed sessions pick up where they left off. Stale entries are pruned on extension load.
 
+## Image generation
+
+agy can generate images when prompted. The extension automatically detects new images after each call and appends their file paths to the response:
+
+```
+I have generated the image...
+
+Generated images:
+/home/user/.gemini/antigravity-cli/brain/a1b2c3d4-.../fisherman_at_dawn_123456.png
+```
+
+The paths are also available in `details.generatedImages[]` for programmatic use.
+
+### How it works
+
+```mermaid
+sequenceDiagram
+    participant Ext as pi-agy
+    participant Brain as brain/conv-id/
+    participant Agy as agy CLI
+
+    Ext->>Brain: snapshot *.png/*.jpg/*.webp
+    Ext->>Agy: spawn agy (image prompt)
+    Agy->>Brain: save generated image
+    Agy-->>Ext: text response
+    Ext->>Brain: diff → find new images
+    Ext-->>Ext: append paths to response
+```
+
+agy saves images to `~/.gemini/antigravity-cli/brain/<conversation-id>/`. The extension knows the conversation ID from the session mapping, so it only checks the relevant directory.
+
 ## Timeout guidance
 
 Always set `timeoutSec` explicitly — the default (120s) is only safe for simple one-shot questions.
@@ -211,7 +242,7 @@ Always set `timeoutSec` explicitly — the default (120s) is only safe for simpl
 - **Windows** — not supported. The extension uses `which` for CLI discovery and Unix-style paths (`~/.local/bin/agy`). Contributions welcome.
 - **Model selection** — agy has no `--model` CLI flag. The extension swaps `~/.gemini/antigravity-cli/settings.json` before each call and restores it after. If pi crashes mid-call, the settings file may retain the overridden model.
 - **No streaming** — `agy -p` returns output only on completion.
-- **Image generation** — agy can generate images, but `-p` mode only returns text confirmation. The generated image is saved to `~/.gemini/antigravity-cli/brain/<conv-id>/`. The extension does not currently extract or return the image file automatically.
+- **Image generation** — agy can generate images, but `-p` mode only returns text confirmation (no binary data on stdout). The extension detects new images and returns their paths — see [Image generation](#image-generation).
 - **Conversation auto-continue** — session mapping relies on `~/.pi/agy-sessions.json` (pi→agy) and `~/.gemini/antigravity-cli/cache/last_conversations.json` (first-call discovery). If either is unavailable, each call starts a fresh conversation (graceful degradation).
 
 ## Development
