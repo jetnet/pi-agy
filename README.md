@@ -184,7 +184,7 @@ sequenceDiagram
     Ext->>Map: lookup piSessionId
     Map-->>Ext: "a1b2c3d4-..."
     Ext->>Agy: spawn agy --conversation a1b2c3d4-...
-    Note right of Agy: Gemini has full<br/>prior context
+    Note right of Agy: Gemini has full prior context
     Agy-->>Ext: response text
     Ext-->>Pi: response + details.conversationId
 ```
