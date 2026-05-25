@@ -103,6 +103,39 @@ Available models (exact names from the agy TUI):
 
 The override is temporary — the original model is restored after the call. Running interactive agy sessions are unaffected (they read settings once on startup).
 
+### How model switching works
+
+agy has no `--model` CLI flag and no environment variable override. The active model is stored in `~/.gemini/antigravity-cli/settings.json`:
+
+```json
+{ "model": "Gemini 3.5 Flash (High)" }
+```
+
+```mermaid
+sequenceDiagram
+    participant Pi as Pi (Opus)
+    participant Ext as pi-agy
+    participant Cfg as settings.json
+    participant Agy as agy CLI
+
+    Pi->>Ext: agy(prompt, model="Gemini 3.1 Pro (High)")
+    Ext->>Cfg: read current model
+    Cfg-->>Ext: "Gemini 3.5 Flash (High)"
+    Ext->>Cfg: write "Gemini 3.1 Pro (High)"
+    Ext->>Agy: spawn agy (reads settings.json on startup)
+    Agy-->>Ext: response
+    Ext->>Cfg: restore "Gemini 3.5 Flash (High)"
+    Ext-->>Pi: response
+```
+
+If the requested model's quota is exhausted, agy's print mode silently falls back to another model instead of erroring. The extension detects this by parsing `RESOURCE_EXHAUSTED` from agy's `--log-file` and returns `isError: true`:
+
+```
+⚠ Quota exhausted for Claude Sonnet 4.6 (Thinking): Individual quota reached
+```
+
+**Known limitation:** if Pi crashes between the settings swap and the restore, `settings.json` retains the overridden model. The next agy call (or TUI session) will use that model until manually changed via `/model`.
+
 ## Conversation continuation
 
 Each pi session gets its own agy conversation. Gemini retains full context from prior `agy` and `agy_image` calls within the same session — no need to re-explain what you're working on.
