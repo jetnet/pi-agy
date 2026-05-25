@@ -47,4 +47,5 @@ export interface AgyToolDetails {
 	exitCode: number;
 	model?: string;
 	conversationId?: string;
+	generatedImages?: string[];
 }

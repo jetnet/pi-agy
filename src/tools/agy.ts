@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { syncAccount } from "../accounts";
 import { spawnAgy } from "../execute";
+import { findNewImages, snapshotImages } from "../images";
 import { getCachedModel, probeActiveModel, resetModelCache } from "../model";
 import { findKnownModel, setModel } from "../model-settings";
 import { afterAgyCall, resolveConversationId } from "../session";
@@ -64,6 +65,9 @@ export async function executeAgy(
 		resetModelCache();
 	}
 
+	// Snapshot images before call (for generated image detection)
+	const imagesBefore = snapshotImages(conversationId);
+
 	const result: SpawnAgyResult = await spawnAgy(finalPrompt, {
 		cwd: workDir,
 		timeoutSec,
@@ -115,14 +119,25 @@ export async function executeAgy(
 	const isError = result.isError;
 	const responseText = isError && !result.text ? result.stderr || "(agy exited with no output)" : result.text;
 
+	// Check for generated images
+	const newImages = findNewImages(finalConversationId, imagesBefore);
+	const outputParts = [responseText];
+	if (newImages.length > 0) {
+		outputParts.push("", "Generated images:");
+		for (const img of newImages) {
+			outputParts.push(img);
+		}
+	}
+
 	return {
-		content: [{ type: "text", text: responseText }],
+		content: [{ type: "text", text: outputParts.join("\n") }],
 		details: {
 			durationMs: result.durationMs,
 			account,
 			exitCode: result.exitCode,
 			model: getCachedModel(),
 			conversationId: finalConversationId,
+			generatedImages: newImages.length > 0 ? newImages : undefined,
 		},
 		isError,
 	};
