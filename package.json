@@ -3,6 +3,7 @@
 	"private": true,
 	"version": "0.3.0",
 	"description": "Pi extension wrapping Google Antigravity CLI (agy): send any prompt to Gemini with optional file or directory context",
+	"image": "icon.png",
 	"type": "module",
 	"license": "MIT",
 	"files": [

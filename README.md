@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="icon.png" alt="pi-agy logo" width="180" />
+</p>
+
 # pi-agy
 
 Pi extension that wraps Google's Antigravity CLI (`agy`) as native LLM-callable tools. Opus delegates tasks to Gemini Flash without thinking about CLI flags, model selection, or account state.
