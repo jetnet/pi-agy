@@ -211,7 +211,7 @@ Always set `timeoutSec` explicitly — the default (120s) is only safe for simpl
 - **Windows** — not supported. The extension uses `which` for CLI discovery and Unix-style paths (`~/.local/bin/agy`). Contributions welcome.
 - **Model selection** — agy has no `--model` CLI flag. The extension swaps `~/.gemini/antigravity-cli/settings.json` before each call and restores it after. If pi crashes mid-call, the settings file may retain the overridden model.
 - **No streaming** — `agy -p` returns output only on completion.
-- **Image generation** — not supported; `agy -p` is text-only.
+- **Image generation** — agy can generate images, but `-p` mode only returns text confirmation. The generated image is saved to `~/.gemini/antigravity-cli/brain/<conv-id>/`. The extension does not currently extract or return the image file automatically.
 - **Conversation auto-continue** — session mapping relies on `~/.pi/agy-sessions.json` (pi→agy) and `~/.gemini/antigravity-cli/cache/last_conversations.json` (first-call discovery). If either is unavailable, each call starts a fresh conversation (graceful degradation).
 
 ## Development
