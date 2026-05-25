@@ -91,6 +91,26 @@ action: backup  profile: personal
 action: switch  profile: work
 ```
 
+#### How it works
+
+agy authenticates via two files in `~/.gemini/`:
+
+| File | Contents |
+|---|---|
+| `google_accounts.json` | Active Google account email |
+| `oauth_creds.json` | OAuth refresh token |
+
+The extension copies these files to named profile directories under `~/.pi/agy-accounts/`:
+
+| Action | What happens |
+|---|---|
+| `current` | Reads `~/.gemini/google_accounts.json` → returns the active email |
+| `list` | Lists profile directories under `~/.pi/agy-accounts/` with email and backup date |
+| `backup` | Copies `google_accounts.json` + `oauth_creds.json` from `~/.gemini/` → `~/.pi/agy-accounts/<profile>/` (mode 0600). Writes `metadata.json` with email and timestamp |
+| `switch` | Auto-snapshots current state to `~/.pi/agy-accounts/.last-active/`, then copies the named profile's credential files back into `~/.gemini/` |
+
+> **Note:** a running interactive agy session keeps its loaded credentials in memory. Only new `agy -p` calls pick up the swapped credentials. Profile names are restricted to `[a-zA-Z0-9_-]` to prevent path traversal.
+
 ## Model selection
 
 Pass `model` to override the active model for a single call:
