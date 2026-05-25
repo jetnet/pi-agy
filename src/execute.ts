@@ -1,4 +1,7 @@
 import { spawn } from "node:child_process";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import { findAgyCli } from "./cli";
 import type { SpawnAgyOptions, SpawnAgyResult } from "./types";
 
@@ -17,7 +20,11 @@ export function spawnAgy(prompt: string, opts: SpawnAgyOptions): Promise<SpawnAg
 		const agyPath = findAgyCli();
 		const timeoutStr = `${opts.timeoutSec}s`;
 
-		const args: string[] = ["--dangerously-skip-permissions", "--print-timeout", timeoutStr];
+		// Capture agy's log to extract the authenticated email (agy uses the OS
+		// keyring and doesn't always update google_accounts.json).
+		const logFile = path.join(os.tmpdir(), `agy-log-${process.pid}-${Date.now()}.log`);
+
+		const args: string[] = ["--dangerously-skip-permissions", "--print-timeout", timeoutStr, "--log-file", logFile];
 		if (opts.conversationId) {
 			args.push("--conversation", opts.conversationId);
 		}
@@ -78,12 +85,17 @@ export function spawnAgy(prompt: string, opts: SpawnAgyOptions): Promise<SpawnAg
 
 			const isError = exitCode !== 0 || (!hasOutput && substantialError);
 
+			// Parse authenticated email from agy's log file
+			const account = parseAccountFromLog(logFile);
+			cleanupLogFile(logFile);
+
 			resolve({
 				text: stdout.trim(),
 				stderr: filteredStderr,
 				exitCode,
 				durationMs,
 				isError,
+				account,
 			});
 		});
 
@@ -114,4 +126,36 @@ export function spawnAgy(prompt: string, opts: SpawnAgyOptions): Promise<SpawnAg
 			}
 		}
 	});
+}
+
+// ── Log parsing helpers ─────────────────────────────────────────────────────────
+
+/**
+ * Parse the authenticated email from agy's log file.
+ * Looks for: `applyAuthResult: email=<addr>` or `authenticated successfully as <addr>`
+ * Returns undefined if the log is missing or the pattern isn't found.
+ */
+function parseAccountFromLog(logFile: string): string | undefined {
+	try {
+		const log = fs.readFileSync(logFile, "utf-8");
+
+		// Primary: applyAuthResult: email=user@example.com
+		const m1 = log.match(/applyAuthResult: email=([^\s,]+)/);
+		if (m1?.[1]) return m1[1];
+
+		// Fallback: authenticated successfully as user@example.com
+		const m2 = log.match(/authenticated successfully as ([^\s,]+)/);
+		if (m2?.[1]) return m2[1];
+	} catch {
+		// Log file missing or unreadable — not fatal
+	}
+	return undefined;
+}
+
+function cleanupLogFile(logFile: string): void {
+	try {
+		fs.unlinkSync(logFile);
+	} catch {
+		// Best-effort cleanup
+	}
 }

@@ -57,6 +57,33 @@ export function getCurrentAccount(): string | null {
 	}
 }
 
+// ── Sync account from agy log ──────────────────────────────────────────────────
+
+/**
+ * Accept the real account email detected from agy's log.
+ * If it differs from google_accounts.json, update the file.
+ * Returns the best-known account email.
+ */
+export function syncAccount(logDetected: string | undefined): string | null {
+	const fileAccount = getCurrentAccount();
+
+	if (!logDetected) return fileAccount;
+
+	// Update google_accounts.json if stale
+	if (logDetected !== fileAccount) {
+		try {
+			const raw = fs.readFileSync(googleAccountsPath(), "utf-8");
+			const parsed = JSON.parse(raw);
+			parsed.active = logDetected;
+			fs.writeFileSync(googleAccountsPath(), JSON.stringify(parsed, null, 2), "utf-8");
+		} catch {
+			// Best-effort — don't fail the call over this
+		}
+	}
+
+	return logDetected;
+}
+
 // ── List profiles ──────────────────────────────────────────────────────────────
 
 export async function listProfiles(): Promise<ProfileInfo[]> {

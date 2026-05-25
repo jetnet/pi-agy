@@ -15,6 +15,8 @@ export interface SpawnAgyResult {
 	exitCode: number;
 	durationMs: number;
 	isError: boolean;
+	/** Authenticated email parsed from agy's log. Undefined if not detected. */
+	account?: string;
 }
 
 export interface UsageRecord {

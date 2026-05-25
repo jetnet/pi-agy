@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { getCurrentAccount } from "../accounts";
+import { syncAccount } from "../accounts";
 import { spawnAgy } from "../execute";
 import { getCachedModel, probeActiveModel, resetModelCache } from "../model";
 import { findKnownModel, setModel } from "../model-settings";
@@ -100,7 +100,7 @@ export async function executeImage(
 	restoreModel();
 	if (requestedModel) resetModelCache();
 
-	const account = getCurrentAccount();
+	const account = syncAccount(result.account);
 	await logCall({
 		ts: new Date().toISOString(),
 		tool: "agy_image",

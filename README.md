@@ -111,6 +111,10 @@ The extension copies these files to named profile directories under `~/.pi/agy-a
 
 > **Note:** a running interactive agy session keeps its loaded credentials in memory. Only new `agy -p` calls pick up the swapped credentials. Profile names are restricted to `[a-zA-Z0-9_-]` to prevent path traversal.
 
+#### Account detection
+
+agy authenticates via the OS keyring and doesn't always update `google_accounts.json` (e.g. after re-authenticating in the TUI). The extension detects the real authenticated email by parsing agy's `--log-file` output after every call (`applyAuthResult: email=...`). If the detected email differs from `google_accounts.json`, the file is updated automatically.
+
 ## Model selection
 
 Pass `model` to override the active model for a single call:
