@@ -93,6 +93,25 @@ export async function executeAgy(
 
 	const finalConversationId = afterAgyCall(piSessionId, conversationId, workDir);
 
+	// Quota error: agy print mode silently falls back to another model.
+	// Surface the error instead of returning the wrong model's response.
+	if (result.quotaError) {
+		const msg = requestedModel
+			? `⚠ Quota exhausted for ${requestedModel}: ${result.quotaError}`
+			: `⚠ Quota exhausted: ${result.quotaError}`;
+		return {
+			content: [{ type: "text", text: msg }],
+			details: {
+				durationMs: result.durationMs,
+				account,
+				exitCode: result.exitCode,
+				model: requestedModel ?? getCachedModel(),
+				conversationId: finalConversationId,
+			},
+			isError: true,
+		};
+	}
+
 	const isError = result.isError;
 	const responseText = isError && !result.text ? result.stderr || "(agy exited with no output)" : result.text;
 

@@ -85,8 +85,8 @@ export function spawnAgy(prompt: string, opts: SpawnAgyOptions): Promise<SpawnAg
 
 			const isError = exitCode !== 0 || (!hasOutput && substantialError);
 
-			// Parse authenticated email from agy's log file
-			const account = parseAccountFromLog(logFile);
+			// Parse account + quota info from agy's log
+			const logInfo = parseLogInfo(logFile);
 			cleanupLogFile(logFile);
 
 			resolve({
@@ -94,8 +94,9 @@ export function spawnAgy(prompt: string, opts: SpawnAgyOptions): Promise<SpawnAg
 				stderr: filteredStderr,
 				exitCode,
 				durationMs,
-				isError,
-				account,
+				isError: isError || !!logInfo.quotaError,
+				account: logInfo.account,
+				quotaError: logInfo.quotaError,
 			});
 		});
 
@@ -130,26 +131,41 @@ export function spawnAgy(prompt: string, opts: SpawnAgyOptions): Promise<SpawnAg
 
 // ── Log parsing helpers ─────────────────────────────────────────────────────────
 
+interface LogInfo {
+	account?: string;
+	quotaError?: string;
+}
+
 /**
- * Parse the authenticated email from agy's log file.
- * Looks for: `applyAuthResult: email=<addr>` or `authenticated successfully as <addr>`
- * Returns undefined if the log is missing or the pattern isn't found.
+ * Parse useful info from agy's log file:
+ * - Authenticated email from `applyAuthResult: email=<addr>`
+ * - Quota errors from `RESOURCE_EXHAUSTED` (agy print mode silently falls back
+ *   to another model instead of erroring, so we must detect this from the log)
  */
-function parseAccountFromLog(logFile: string): string | undefined {
+function parseLogInfo(logFile: string): LogInfo {
 	try {
 		const log = fs.readFileSync(logFile, "utf-8");
+		const info: LogInfo = {};
 
-		// Primary: applyAuthResult: email=user@example.com
+		// Account
 		const m1 = log.match(/applyAuthResult: email=([^\s,]+)/);
-		if (m1?.[1]) return m1[1];
+		if (m1?.[1]) info.account = m1[1];
+		else {
+			const m2 = log.match(/authenticated successfully as ([^\s,]+)/);
+			if (m2?.[1]) info.account = m2[1];
+		}
 
-		// Fallback: authenticated successfully as user@example.com
-		const m2 = log.match(/authenticated successfully as ([^\s,]+)/);
-		if (m2?.[1]) return m2[1];
+		// Quota exhaustion (agy silently falls back in print mode)
+		const qm =
+			log.match(/RESOURCE_EXHAUSTED[^:]*: ([^:]+?)(?::|\.)/) ?? log.match(/Individual quota reached\. ([^.]+)/);
+		if (qm) {
+			info.quotaError = qm[1].trim();
+		}
+
+		return info;
 	} catch {
-		// Log file missing or unreadable — not fatal
+		return {};
 	}
-	return undefined;
 }
 
 function cleanupLogFile(logFile: string): void {

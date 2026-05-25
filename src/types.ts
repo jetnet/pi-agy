@@ -17,6 +17,8 @@ export interface SpawnAgyResult {
 	isError: boolean;
 	/** Authenticated email parsed from agy's log. Undefined if not detected. */
 	account?: string;
+	/** Quota error message if RESOURCE_EXHAUSTED was detected in agy's log. */
+	quotaError?: string;
 }
 
 export interface UsageRecord {
