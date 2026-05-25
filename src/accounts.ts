@@ -1,4 +1,3 @@
-import { execSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -29,12 +28,11 @@ function metadataPath(name: string): string {
 	return path.join(profileDir(name), "metadata.json");
 }
 
-function keyringSecretPath(name: string): string {
-	return path.join(profileDir(name), "keyring.secret");
-}
-
 // ── Profile name validation ───────────────────────────────────────────────────
-
+//
+// Profile names become directory names under ACCOUNTS_DIR. Without a strict
+// guard, `path.join(ACCOUNTS_DIR, name)` can be coerced past the sandbox via
+// `..` or absolute paths, leaking OAuth refresh tokens.
 const PROFILE_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 
 function isValidProfileName(name: string): boolean {
@@ -45,76 +43,6 @@ function isValidProfileName(name: string): boolean {
 
 async function ensureDir(dir: string, mode: number = 0o700): Promise<void> {
 	await fs.promises.mkdir(dir, { recursive: true, mode });
-}
-
-// ── OS keyring helpers (best-effort, via secret-tool) ───────────────────────────
-//
-// agy authenticates via the OS keyring (GNOME Keyring / libsecret) on Linux.
-// The keyring entry takes priority over google_accounts.json / oauth_creds.json.
-// To truly switch accounts, we must swap the keyring entry too.
-//
-// If secret-tool is not available (headless server, macOS, etc.), we skip
-// keyring operations — agy will fall back to file-based auth.
-
-const KEYRING_SERVICE = "gemini";
-const KEYRING_USERNAME = "antigravity";
-const KEYRING_LABEL = "Password for 'antigravity' on 'gemini'";
-
-let hasSecretTool: boolean | null = null;
-
-function secretToolAvailable(): boolean {
-	if (hasSecretTool !== null) return hasSecretTool;
-	try {
-		execSync("which secret-tool", { stdio: "ignore" });
-		hasSecretTool = true;
-	} catch {
-		hasSecretTool = false;
-	}
-	return hasSecretTool;
-}
-
-/** Read the current keyring secret. Returns undefined if unavailable. */
-function readKeyringSecret(): string | undefined {
-	if (!secretToolAvailable()) return undefined;
-	try {
-		const secret = execSync(`secret-tool lookup service ${KEYRING_SERVICE} username ${KEYRING_USERNAME}`, {
-			encoding: "utf-8",
-			stdio: ["ignore", "pipe", "ignore"],
-			timeout: 5000,
-		});
-		return secret || undefined;
-	} catch {
-		return undefined;
-	}
-}
-
-/** Write a secret to the keyring. */
-function writeKeyringSecret(secret: string): boolean {
-	if (!secretToolAvailable()) return false;
-	try {
-		execSync(`secret-tool store --label='${KEYRING_LABEL}' service ${KEYRING_SERVICE} username ${KEYRING_USERNAME}`, {
-			input: secret,
-			stdio: ["pipe", "ignore", "ignore"],
-			timeout: 5000,
-		});
-		return true;
-	} catch {
-		return false;
-	}
-}
-
-/** Clear the keyring entry. */
-function clearKeyringSecret(): boolean {
-	if (!secretToolAvailable()) return false;
-	try {
-		execSync(`secret-tool clear service ${KEYRING_SERVICE} username ${KEYRING_USERNAME}`, {
-			stdio: "ignore",
-			timeout: 5000,
-		});
-		return true;
-	} catch {
-		return false;
-	}
 }
 
 // ── Read email from google_accounts.json ───────────────────────────────────────
@@ -141,6 +69,7 @@ export function syncAccount(logDetected: string | undefined): string | null {
 
 	if (!logDetected) return fileAccount;
 
+	// Update google_accounts.json if stale
 	if (logDetected !== fileAccount) {
 		try {
 			const raw = fs.readFileSync(googleAccountsPath(), "utf-8");
@@ -148,7 +77,7 @@ export function syncAccount(logDetected: string | undefined): string | null {
 			parsed.active = logDetected;
 			fs.writeFileSync(googleAccountsPath(), JSON.stringify(parsed, null, 2), "utf-8");
 		} catch {
-			// Best-effort
+			// Best-effort — don't fail the call over this
 		}
 	}
 
@@ -180,9 +109,7 @@ export async function listProfiles(): Promise<ProfileInfo[]> {
 
 // ── Backup current account as a named profile ──────────────────────────────────
 
-export async function backupProfile(
-	name: string,
-): Promise<{ ok: true; email: string; keyring: boolean } | { ok: false; error: string }> {
+export async function backupProfile(name: string): Promise<{ ok: true; email: string } | { ok: false; error: string }> {
 	if (!isValidProfileName(name)) {
 		return { ok: false, error: "Invalid profile name. Use only letters, numbers, hyphens, and underscores." };
 	}
@@ -196,26 +123,22 @@ export async function backupProfile(
 		const destDir = profileDir(name);
 		await ensureDir(destDir);
 
-		// Files
+		// Read+write atomically with 0o600 — no race window, no separate chmod needed
 		const googleContent = await fs.promises.readFile(googleAccountsPath());
-		await fs.promises.writeFile(path.join(destDir, "google_accounts.json"), googleContent, { mode: 0o600 });
+		const destGoogle = path.join(destDir, "google_accounts.json");
+		await fs.promises.writeFile(destGoogle, googleContent, { mode: 0o600 });
 
+		// Read+write oauth_creds atomically if it exists, with ENOENT-only suppression
+		const destOauth = path.join(destDir, "oauth_creds.json");
 		try {
 			const oauthContent = await fs.promises.readFile(oauthCredsPath());
-			await fs.promises.writeFile(path.join(destDir, "oauth_creds.json"), oauthContent, { mode: 0o600 });
+			await fs.promises.writeFile(destOauth, oauthContent, { mode: 0o600 });
 		} catch (err) {
+			// oauth_creds.json doesn't exist for API-key-auth — best-effort skip
 			if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
 		}
 
-		// Keyring (best-effort)
-		let keyringSaved = false;
-		const secret = readKeyringSecret();
-		if (secret) {
-			await fs.promises.writeFile(keyringSecretPath(name), secret, { mode: 0o600 });
-			keyringSaved = true;
-		}
-
-		// Metadata
+		// Write metadata
 		const meta: ProfileInfo = {
 			name,
 			email: current,
@@ -223,7 +146,7 @@ export async function backupProfile(
 		};
 		await fs.promises.writeFile(metadataPath(name), JSON.stringify(meta, null, 2), "utf-8");
 
-		return { ok: true, email: current, keyring: keyringSaved };
+		return { ok: true, email: current };
 	} catch (err) {
 		return { ok: false, error: `Backup failed: ${(err as Error).message}` };
 	}
@@ -231,9 +154,7 @@ export async function backupProfile(
 
 // ── Switch to a named profile ──────────────────────────────────────────────────
 
-export async function switchProfile(
-	name: string,
-): Promise<{ ok: true; email: string; keyring: boolean } | { ok: false; error: string }> {
+export async function switchProfile(name: string): Promise<{ ok: true; email: string } | { ok: false; error: string }> {
 	if (!isValidProfileName(name)) {
 		return { ok: false, error: "Invalid profile name. Use only letters, numbers, hyphens, and underscores." };
 	}
@@ -252,19 +173,10 @@ export async function switchProfile(
 			await fs.promises.copyFile(googleAccountsPath(), path.join(lastActiveDir(), "google_accounts.json"));
 			await fs.promises.copyFile(oauthCredsPath(), path.join(lastActiveDir(), "oauth_creds.json"));
 		} catch {
-			// Snapshot best-effort
-		}
-		// Snapshot current keyring too
-		const currentSecret = readKeyringSecret();
-		if (currentSecret) {
-			try {
-				await fs.promises.writeFile(path.join(lastActiveDir(), "keyring.secret"), currentSecret, { mode: 0o600 });
-			} catch {
-				/* best-effort */
-			}
+			// Snapshot best-effort — may not exist
 		}
 
-		// Validate profile
+		// Validate profile's google_accounts.json
 		const profileAccountsPath = path.join(srcDir, "google_accounts.json");
 		const raw = await fs.promises.readFile(profileAccountsPath, "utf-8");
 		const parsed = JSON.parse(raw) as { active?: string };
@@ -272,7 +184,8 @@ export async function switchProfile(
 			return { ok: false, error: "Profile's google_accounts.json is missing or invalid." };
 		}
 
-		// Swap files
+		// Write validated content to ~/.gemini/ — single atomic write closes the
+		// TOCTOU window between validation and the copy that would re-read disk.
 		await fs.promises.writeFile(googleAccountsPath(), raw, { mode: 0o600, encoding: "utf-8" });
 
 		const profileOauthPath = path.join(srcDir, "oauth_creds.json");
@@ -280,24 +193,11 @@ export async function switchProfile(
 			const oauthContent = await fs.promises.readFile(profileOauthPath);
 			await fs.promises.writeFile(oauthCredsPath(), oauthContent, { mode: 0o600 });
 		} catch (err) {
+			// No oauth_creds in profile — that's fine
 			if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
 		}
 
-		// Swap keyring (best-effort)
-		let keyringSwapped = false;
-		const profileKeyringPath = keyringSecretPath(name);
-		try {
-			const profileSecret = await fs.promises.readFile(profileKeyringPath, "utf-8");
-			if (profileSecret) {
-				// Clear old entry first, then write new one
-				clearKeyringSecret();
-				keyringSwapped = writeKeyringSecret(profileSecret);
-			}
-		} catch {
-			// No keyring backup for this profile — skip
-		}
-
-		return { ok: true, email: parsed.active, keyring: keyringSwapped };
+		return { ok: true, email: parsed.active };
 	} catch (err) {
 		return { ok: false, error: `Switch failed: ${(err as Error).message}` };
 	}
