@@ -64,8 +64,12 @@ export async function executeAccount(
 			}
 			const result = await backupProfile(profile);
 			if (result.ok) {
+				const keyringNote = result.keyring
+					? "Keyring credentials saved."
+					: "Keyring not available — file-based credentials only.";
 				return ok(
 					`Backed up current account '${result.email}' as profile '${profile}'.\n` +
+						`${keyringNote}\n` +
 						"Files stored at ~/.pi/agy-accounts/\n" +
 						"Note: if an interactive agy session is running, it keeps its loaded credentials.\n" +
 						"New agy -p calls pick up the swapped credentials automatically.",
@@ -80,8 +84,12 @@ export async function executeAccount(
 			}
 			const result = await switchProfile(profile);
 			if (result.ok) {
+				const keyringNote = result.keyring
+					? "Keyring credentials swapped."
+					: "Keyring not swapped (no saved keyring for this profile — re-auth in agy TUI if needed).";
 				return ok(
 					`Switched to account '${result.email}' (profile: ${profile}).\n` +
+						`${keyringNote}\n` +
 						"Previous state auto-snapshot to ~/.pi/agy-accounts/.last-active/\n" +
 						"Note: if an interactive agy session is running, it keeps its loaded credentials.\n" +
 						"New agy -p calls pick up the swapped credentials automatically.",

@@ -94,23 +94,27 @@ action: switch  profile: work
 
 #### How it works
 
-agy authenticates via two files in `~/.gemini/`:
+agy authenticates via the OS keyring (GNOME Keyring / libsecret on Linux) and two files in `~/.gemini/`:
 
-| File | Contents |
-|---|---|
-| `google_accounts.json` | Active Google account email |
-| `oauth_creds.json` | OAuth refresh token |
+| Credential | Location | Priority |
+|---|---|---|
+| Keyring entry | `service=gemini username=antigravity` | **Highest** — agy uses this first |
+| `google_accounts.json` | `~/.gemini/` | Active email |
+| `oauth_creds.json` | `~/.gemini/` | Fallback OAuth token |
 
-The extension copies these files to named profile directories under `~/.pi/agy-accounts/`:
+The extension backs up all three to `~/.pi/agy-accounts/<profile>/`:
 
 | Action | What happens |
 |---|---|
 | `current` | Reads `~/.gemini/google_accounts.json` → returns the active email |
 | `list` | Lists profile directories under `~/.pi/agy-accounts/` with email and backup date |
-| `backup` | Copies `google_accounts.json` + `oauth_creds.json` from `~/.gemini/` → `~/.pi/agy-accounts/<profile>/` (mode 0600). Writes `metadata.json` with email and timestamp |
-| `switch` | Auto-snapshots current state to `~/.pi/agy-accounts/.last-active/`, then copies the named profile's credential files back into `~/.gemini/` |
+| `backup` | Saves `google_accounts.json` + `oauth_creds.json` + keyring secret → `~/.pi/agy-accounts/<profile>/` (mode 0600) |
+| `switch` | Auto-snapshots current state to `.last-active/`, then restores the named profile's files **and keyring entry** |
 
-> **Note:** a running interactive agy session keeps its loaded credentials in memory. Only new `agy -p` calls pick up the swapped credentials. Profile names are restricted to `[a-zA-Z0-9_-]` to prevent path traversal.
+> **Notes:**
+> - A running interactive agy session keeps its loaded credentials in memory. Only new `agy -p` calls pick up swapped credentials.
+> - Profile names are restricted to `[a-zA-Z0-9_-]` to prevent path traversal.
+> - If `secret-tool` is not available (headless server, macOS), keyring operations are skipped — file-based auth is used as fallback.
 
 #### Account detection
 

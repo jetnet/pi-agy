@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Model selection** — new optional `model` parameter on `agy` and `agy_image`. Temporarily overrides the active model in agy's settings.json for a single call, then restores it. Case-insensitive matching against known model names.
 - New `src/model-settings.ts` module: reads/writes `~/.gemini/antigravity-cli/settings.json`, validates against known model list, provides atomic swap+restore.
+- **Keyring-aware account switching** — `backup` and `switch` now save/restore the OS keyring entry (`secret-tool`) in addition to files. This fixes account switching on Linux where agy authenticates via GNOME Keyring. Falls back to file-only when `secret-tool` is not available.
+- **Quota exhaustion detection** — parses `RESOURCE_EXHAUSTED` from agy's log. When agy's print mode silently falls back to another model on quota exhaustion, the extension now returns `isError: true` with a clear message instead of the wrong model's response.
 - **Account detection from agy log** — every agy call now captures `--log-file` and parses the real authenticated email from `applyAuthResult: email=...`. If `google_accounts.json` is stale (common after re-auth in the TUI), it's auto-updated. Falls back to the file if log parsing fails.
 - **Session-scoped conversation continuation** — each pi session gets its own agy conversation. Gemini retains full prior context across `agy` and `agy_image` calls within the same session. Multiple pi sessions sharing a cwd are fully isolated.
 - New `conversationId` parameter on `agy` and `agy_image`: pass a UUID to resume a specific conversation, `'new'` to force a fresh one, or omit to auto-continue (default).
