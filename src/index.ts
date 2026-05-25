@@ -14,9 +14,8 @@
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { renderCall, renderResult } from "./render";
-import { AccountParams, AgyParams, ImageParams, UsageParams } from "./schemas";
+import { AgyParams, ImageParams, UsageParams } from "./schemas";
 import { pruneSessionMap } from "./session";
-import { executeAccount } from "./tools/account";
 import { executeAgy } from "./tools/agy";
 import { executeImage } from "./tools/image";
 import { executeUsage } from "./tools/usage";
@@ -98,25 +97,6 @@ export default function piAgyExtension(pi: ExtensionAPI): void {
 		parameters: UsageParams,
 		async execute(_toolCallId, params, signal, onUpdate, ctx) {
 			return executeUsage(params, signal, onUpdate as any, ctx) as any;
-		},
-		renderCall,
-		renderResult,
-	});
-
-	// ── Tool: agy_account ───────────────────────────────────────────────
-	pi.registerTool({
-		name: "agy_account",
-		label: "Agy Account",
-		description:
-			"Manage Google accounts for agy. " + "List profiles, show current, backup current, or switch to a saved profile.",
-		promptSnippet: "Manage agy accounts — triggers on 'switch account', 'backup account', 'list accounts'",
-		promptGuidelines: [
-			"Use agy_account to switch between Google accounts for agy.",
-			"Back up each account before switching: action:backup profile:<name>.",
-		],
-		parameters: AccountParams,
-		async execute(_toolCallId, params, signal, onUpdate, ctx) {
-			return executeAccount(params, signal, onUpdate as any, ctx) as any;
 		},
 		renderCall,
 		renderResult,

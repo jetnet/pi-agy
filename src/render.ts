@@ -6,13 +6,7 @@ import type { AgyToolDetails } from "./types";
 
 /** Shared renderCall for all agy tools. */
 export function renderCall(args: any, theme: any): any {
-	const toolName: string = args.imagePath
-		? "agy_image"
-		: args.action
-			? "agy_account"
-			: args.window
-				? "agy_usage"
-				: "agy";
+	const toolName: string = args.imagePath ? "agy_image" : args.window ? "agy_usage" : "agy";
 	const model = args.action || args.window ? "" : theme.fg("accent", `[${args._model ?? "gemini"}]`);
 
 	let text = theme.fg("toolTitle", theme.bold(`⚡ ${toolName} `)) + model;
@@ -36,11 +30,6 @@ export function renderCall(args: any, theme: any): any {
 
 	if (args.model) {
 		text += `\n  ${theme.fg("muted", "model: ")}${theme.fg("accent", args.model)}`;
-	}
-
-	if (args.action) {
-		text += `\n  ${theme.fg("muted", "action: ")}${theme.fg("accent", args.action)}`;
-		if (args.profile) text += `  ${theme.fg("dim", args.profile)}`;
 	}
 
 	return new Text(text, 0, 0);

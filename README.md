@@ -76,45 +76,9 @@ account: "work"                                # optional, filter by profile
 
 Soft-warns at 50 calls/day or 200/week. Never blocks calls. Counter is local only — does not reflect Google's server-side quota.
 
-### `agy_account`
+### Account detection
 
-Manage Google accounts by swapping `~/.gemini/` credentials.
-
-```
-action:  "list" | "current" | "backup" | "switch"
-profile: "work"   # required for backup/switch
-```
-
-Always back up before the first switch:
-```
-action: backup  profile: work
-action: backup  profile: personal
-action: switch  profile: work
-```
-
-#### How it works
-
-agy authenticates via two files in `~/.gemini/`:
-
-| File | Contents |
-|---|---|
-| `google_accounts.json` | Active Google account email |
-| `oauth_creds.json` | OAuth refresh token |
-
-The extension copies these files to named profile directories under `~/.pi/agy-accounts/`:
-
-| Action | What happens |
-|---|---|
-| `current` | Reads `~/.gemini/google_accounts.json` → returns the active email |
-| `list` | Lists profile directories under `~/.pi/agy-accounts/` with email and backup date |
-| `backup` | Copies `google_accounts.json` + `oauth_creds.json` from `~/.gemini/` → `~/.pi/agy-accounts/<profile>/` (mode 0600). Writes `metadata.json` with email and timestamp |
-| `switch` | Auto-snapshots current state to `~/.pi/agy-accounts/.last-active/`, then copies the named profile's credential files back into `~/.gemini/` |
-
-> **Note:** a running interactive agy session keeps its loaded credentials in memory. Only new `agy -p` calls pick up the swapped credentials. Profile names are restricted to `[a-zA-Z0-9_-]` to prevent path traversal.
-
-#### Account detection
-
-agy authenticates via the OS keyring and doesn't always update `google_accounts.json` (e.g. after re-authenticating in the TUI). The extension detects the real authenticated email by parsing agy's `--log-file` output after every call (`applyAuthResult: email=...`). If the detected email differs from `google_accounts.json`, the file is updated automatically.
+agy authenticates via the OS keyring and doesn't always update `google_accounts.json` (e.g. after re-authenticating in the TUI). The extension detects the real authenticated email by parsing agy's `--log-file` output after every call (`applyAuthResult: email=...`). If the detected email differs from `google_accounts.json`, the file is updated automatically. To switch accounts, re-authenticate in the agy TUI (`agy` → `/login`).
 
 ## Model selection
 
@@ -215,7 +179,6 @@ Always set `timeoutSec` explicitly — the default (120s) is only safe for simpl
 - **Model selection** — agy has no `--model` CLI flag. The extension swaps `~/.gemini/antigravity-cli/settings.json` before each call and restores it after. If pi crashes mid-call, the settings file may retain the overridden model.
 - **No streaming** — `agy -p` returns output only on completion.
 - **Image generation** — not supported; `agy -p` is text-only.
-- **Running agy sessions** — retain their loaded credentials until restarted after an account switch.
 - **Conversation auto-continue** — session mapping relies on `~/.pi/agy-sessions.json` (pi→agy) and `~/.gemini/antigravity-cli/cache/last_conversations.json` (first-call discovery). If either is unavailable, each call starts a fresh conversation (graceful degradation).
 
 ## Development

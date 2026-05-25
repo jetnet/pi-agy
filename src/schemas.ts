@@ -92,17 +92,3 @@ export const UsageParams = Type.Object({
 		}),
 	),
 });
-
-// ── agy_account ────────────────────────────────────────────────────────────────
-
-export const AccountParams = Type.Object({
-	action: Type.Union([Type.Literal("list"), Type.Literal("current"), Type.Literal("backup"), Type.Literal("switch")], {
-		description:
-			"'list' = list profiles. 'current' = show active account. 'backup' = backup current as named profile. 'switch' = switch to profile.",
-	}),
-	profile: Type.Optional(
-		Type.String({
-			description: "Profile name for backup/switch. e.g. 'work' or 'personal'.",
-		}),
-	),
-});

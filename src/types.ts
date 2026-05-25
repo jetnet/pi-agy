@@ -41,12 +41,6 @@ export interface UsageSummary {
 	warnings: string[];
 }
 
-export interface ProfileInfo {
-	name: string;
-	email: string;
-	backedUpAt: string;
-}
-
 export interface AgyToolDetails {
 	durationMs: number;
 	account: string | null;
