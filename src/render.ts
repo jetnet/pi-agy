@@ -34,6 +34,10 @@ export function renderCall(args: any, theme: any): any {
 		text += `\n  ${theme.fg("muted", "files: ")}${theme.fg("dim", args.contextFiles.join(", "))}`;
 	}
 
+	if (args.model) {
+		text += `\n  ${theme.fg("muted", "model: ")}${theme.fg("accent", args.model)}`;
+	}
+
 	if (args.action) {
 		text += `\n  ${theme.fg("muted", "action: ")}${theme.fg("accent", args.action)}`;
 		if (args.profile) text += `  ${theme.fg("dim", args.profile)}`;

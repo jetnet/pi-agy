@@ -36,6 +36,16 @@ export const AgyParams = Type.Object({
 				"Omit to auto-continue the last conversation for the working directory, or set to 'new' to force a fresh conversation.",
 		}),
 	),
+	model: Type.Optional(
+		Type.String({
+			description:
+				"Model to use for this call. Temporarily overrides agy's active model. " +
+				"Known models: 'Gemini 3.5 Flash (High)', 'Gemini 3.5 Flash (Medium)', 'Gemini 3.5 Flash (Low)', " +
+				"'Gemini 3.1 Pro (High)', 'Gemini 3.1 Pro (Low)', 'Claude Sonnet 4.6 (Thinking)', " +
+				"'Claude Opus 4.6 (Thinking)', 'GPT-OSS 120B (Medium)'. " +
+				"Omit to use whatever model is configured in the agy TUI.",
+		}),
+	),
 });
 
 // ── agy_image ──────────────────────────────────────────────────────────────────
@@ -57,6 +67,13 @@ export const ImageParams = Type.Object({
 				"Resume a previous agy conversation by ID (UUID). " +
 				"When set, passes --conversation to the agy CLI so Gemini has full prior context. " +
 				"Omit to auto-continue the last conversation for the working directory, or set to 'new' to force a fresh conversation.",
+		}),
+	),
+	model: Type.Optional(
+		Type.String({
+			description:
+				"Model to use for this call. Same options as the agy tool. " +
+				"Omit to use whatever model is configured in the agy TUI.",
 		}),
 	),
 });

@@ -1,7 +1,7 @@
 {
 	"name": "pi-agy",
 	"private": true,
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"description": "Pi extension wrapping Google Antigravity CLI (agy): send any prompt to Gemini with optional file or directory context",
 	"type": "module",
 	"license": "MIT",

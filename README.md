@@ -38,6 +38,7 @@ contextFiles:    ["src/auth.ts", "src/middleware.ts"]   # 1–3 targeted files, 
 contextDir:      "src"                                  # whole directory via --add-dir, no size limit
 timeoutSec:      240                                    # always set explicitly — see Timeout guidance below
 conversationId:  "e973694d-85e4-..."                     # optional: resume a specific conversation
+model:           "Gemini 3.1 Pro (High)"                   # optional: override model for this call
 ```
 
 **`contextFiles` vs `contextDir`**
@@ -56,6 +57,7 @@ Send a prompt + image file to Gemini (PNG, JPG, WebP, GIF).
 imagePath:  "screenshots/mockup.png"
 prompt:     "Convert this to a React + Tailwind component"
 timeoutSec: 120   # optional, default 120
+model:      "Gemini 3.1 Pro (High)"  # optional
 ```
 
 The image is copied to an isolated temp directory before passing to agy, so only the target file is exposed to Gemini.
@@ -88,6 +90,29 @@ action: backup  profile: work
 action: backup  profile: personal
 action: switch  profile: work
 ```
+
+## Model selection
+
+Pass `model` to override the active model for a single call:
+
+```
+model: "Gemini 3.1 Pro (High)"
+```
+
+Available models (exact names from the agy TUI):
+
+| Model | Notes |
+|---|---|
+| Gemini 3.5 Flash (High) | Default if not changed |
+| Gemini 3.5 Flash (Medium) | |
+| Gemini 3.5 Flash (Low) | |
+| Gemini 3.1 Pro (High) | |
+| Gemini 3.1 Pro (Low) | |
+| Claude Sonnet 4.6 (Thinking) | |
+| Claude Opus 4.6 (Thinking) | |
+| GPT-OSS 120B (Medium) | |
+
+The override is temporary — the original model is restored after the call. Running interactive agy sessions are unaffected (they read settings once on startup).
 
 ## Conversation continuation
 
@@ -161,7 +186,7 @@ Always set `timeoutSec` explicitly — the default (120s) is only safe for simpl
 
 ## Limitations
 
-- **Model selection** — `agy -m` is silently ignored in agy 1.0.0. Set the model once via `agy` TUI `/model`. The extension detects the active model via a one-time probe on first call per session.
+- **Model selection** — agy has no `--model` CLI flag. The extension swaps `~/.gemini/antigravity-cli/settings.json` before each call and restores it after. If pi crashes mid-call, the settings file may retain the overridden model.
 - **No streaming** — `agy -p` returns output only on completion.
 - **Image generation** — not supported; `agy -p` is text-only.
 - **Running agy sessions** — retain their loaded credentials until restarted after an account switch.

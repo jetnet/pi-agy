@@ -2,7 +2,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { getCurrentAccount } from "../accounts";
 import { spawnAgy } from "../execute";
-import { getCachedModel, probeActiveModel } from "../model";
+import { getCachedModel, probeActiveModel, resetModelCache } from "../model";
+import { findKnownModel, setModel } from "../model-settings";
 import { afterAgyCall, resolveConversationId } from "../session";
 import type { AgyToolDetails, SpawnAgyResult } from "../types";
 import { logCall } from "../usage";
@@ -44,6 +45,25 @@ export async function executeAgy(
 
 	const conversationId = resolveConversationId(params.conversationId, piSessionId);
 
+	// Model override: swap settings.json if a model was specified
+	let restoreModel = () => {};
+	let requestedModel: string | undefined;
+	if (params.model) {
+		const resolved = findKnownModel(params.model);
+		if (!resolved) {
+			return {
+				content: [
+					{ type: "text", text: `Unknown model '${params.model}'. Use the exact name from the agy TUI /model list.` },
+				],
+				details: { durationMs: 0, account: null, exitCode: 1, model: getCachedModel() },
+				isError: true,
+			};
+		}
+		requestedModel = resolved;
+		restoreModel = setModel(resolved);
+		resetModelCache();
+	}
+
 	const result: SpawnAgyResult = await spawnAgy(finalPrompt, {
 		cwd: workDir,
 		timeoutSec,
@@ -54,6 +74,10 @@ export async function executeAgy(
 			? (status: string) => onUpdate({ content: [{ type: "text" as const, text: status }] })
 			: undefined,
 	});
+
+	// Restore original model before anything else
+	restoreModel();
+	if (requestedModel) resetModelCache();
 
 	const account = getCurrentAccount();
 	await logCall({

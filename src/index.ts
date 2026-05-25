@@ -51,6 +51,8 @@ export default function piAgyExtension(pi: ExtensionAPI): void {
 				"Gemini retains full context from prior calls within the same session. " +
 				"Pass conversationId='new' to force a fresh conversation. " +
 				"The response includes the conversationId in details for chaining.",
+			"Pass model to override the active model for one call (e.g. 'Gemini 3.1 Pro (High)'). " +
+				"Omit to use whatever is configured in the agy TUI. The override is temporary — the original model is restored after the call.",
 		],
 		parameters: AgyParams,
 		async execute(_toolCallId, params, signal, onUpdate, ctx) {

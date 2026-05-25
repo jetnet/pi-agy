@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-05-25
+## [0.3.0] - 2026-05-25
 
 ### Added
+- **Model selection** — new optional `model` parameter on `agy` and `agy_image`. Temporarily overrides the active model in agy's settings.json for a single call, then restores it. Case-insensitive matching against known model names.
+- New `src/model-settings.ts` module: reads/writes `~/.gemini/antigravity-cli/settings.json`, validates against known model list, provides atomic swap+restore.
 - **Session-scoped conversation continuation** — each pi session gets its own agy conversation. Gemini retains full prior context across `agy` and `agy_image` calls within the same session. Multiple pi sessions sharing a cwd are fully isolated.
 - New `conversationId` parameter on `agy` and `agy_image`: pass a UUID to resume a specific conversation, `'new'` to force a fresh one, or omit to auto-continue (default).
 - Conversation ID returned in `details.conversationId` on every response for explicit chaining.
