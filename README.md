@@ -4,6 +4,7 @@ Pi extension that wraps Google's Antigravity CLI (`agy`) as native LLM-callable 
 
 ## Requirements
 
+- **Linux or macOS** (Windows is not supported — see [Limitations](#limitations))
 - `agy` on PATH (Google Antigravity CLI)
 - Logged in once via `agy` TUI (OAuth)
 - Model selected via `agy` TUI `/model` (inherited by all `-p` calls)
@@ -210,6 +211,7 @@ Always set `timeoutSec` explicitly — the default (120s) is only safe for simpl
 
 ## Limitations
 
+- **Windows** — not supported. The extension uses `which` for CLI discovery and Unix-style paths (`~/.local/bin/agy`). Contributions welcome.
 - **Model selection** — agy has no `--model` CLI flag. The extension swaps `~/.gemini/antigravity-cli/settings.json` before each call and restores it after. If pi crashes mid-call, the settings file may retain the overridden model.
 - **No streaming** — `agy -p` returns output only on completion.
 - **Image generation** — not supported; `agy -p` is text-only.
