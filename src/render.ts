@@ -1,6 +1,6 @@
 import { getMarkdownTheme } from "@earendil-works/pi-coding-agent";
 import { Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
-import type { AgyToolDetails } from "./types";
+import type { AgyToolDetails } from "./types.ts";
 
 // ── TUI rendering ──────────────────────────────────────────────────────────────
 

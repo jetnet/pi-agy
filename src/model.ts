@@ -1,4 +1,4 @@
-import { spawnAgy } from "./execute";
+import { spawnAgy } from "./execute.ts";
 
 // ── Active model detection ─────────────────────────────────────────────────────
 //
@@ -89,4 +89,16 @@ export function getCachedModel(): string {
 export function resetModelCache(): void {
 	cachedModel = null;
 	probePromise = null;
+}
+
+/**
+ * Directly set the cached model — used by the rotation-ON path to populate
+ * the cache from the selected account's settings.json WITHOUT spawning agy.
+ * The probe is bypassed entirely when rotation is active.
+ */
+export function setModelCache(model: string): void {
+	cachedModel = model;
+	// Leave probePromise as-is: if a probe is in flight (rotation-OFF called it
+	// earlier), it will settle into cachedModel. In rotation-ON we never start a
+	// probe, so probePromise stays null throughout.
 }

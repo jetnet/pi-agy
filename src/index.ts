@@ -1,24 +1,31 @@
 /**
  * pi-agy
  *
- * Registers 4 tools that delegate tasks to Google's Antigravity CLI (agy)
+ * Registers 3 tools that delegate tasks to Google's Antigravity CLI (agy)
  * running in non-interactive print mode (-p).
  *
- * - agy:         send any prompt to Gemini, optionally inject file context
- * - agy_image:   send a prompt + image file (uses --add-dir workaround)
- * - agy_usage:   local request counter with soft-warn thresholds
- * - agy_account: switch Google accounts by swapping ~/.gemini/ state
+ * - agy:       send any prompt to Gemini, optionally inject file context
+ * - agy_image: send a prompt + image file (uses --add-dir workaround)
+ * - agy_usage: local request counter with soft-warn thresholds
+ *
+ * Account rotation (optional):
+ *   Configure ~/.pi/agy-rotation.config.json with an `accounts` array
+ *   (each entry: { name, home }). When present, agy and agy_image automatically
+ *   rotate to the next pre-authenticated account on quota exhaustion (429-class).
+ *   Switching is done via HOME + DBUS_SESSION_BUS_ADDRESS env override per spawn.
+ *   Each account home must be pre-authenticated via the agy TUI.
+ *   Without the config, all calls use Pi's default HOME (original behavior).
  *
  * Requires: agy on PATH, OAuth login via agy TUI, model selected via agy /model
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { renderCall, renderResult } from "./render";
-import { AgyParams, ImageParams, UsageParams } from "./schemas";
-import { pruneSessionMap } from "./session";
-import { executeAgy } from "./tools/agy";
-import { executeImage } from "./tools/image";
-import { executeUsage } from "./tools/usage";
+import { renderCall, renderResult } from "./render.ts";
+import { AgyParams, ImageParams, UsageParams } from "./schemas.ts";
+import { pruneSessionMap } from "./session.ts";
+import { executeAgy } from "./tools/agy.ts";
+import { executeImage } from "./tools/image.ts";
+import { executeUsage } from "./tools/usage.ts";
 
 export default function piAgyExtension(pi: ExtensionAPI): void {
 	// Housekeeping: prune stale pi→agy session mappings on load

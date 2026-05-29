@@ -14,7 +14,7 @@
 	],
 	"pi": {
 		"extensions": [
-			"./dist/index.js"
+			"./src/index.ts"
 		]
 	},
 	"peerDependencies": {
@@ -32,6 +32,6 @@
 	},
 	"scripts": {
 		"check": "biome check --write --error-on-warnings . && tsc --noEmit",
-		"test": "echo 'no tests yet' && exit 0"
+		"test": "node --experimental-strip-types --test test/rotation.test.ts"
 	}
 }

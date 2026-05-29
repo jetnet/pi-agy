@@ -24,9 +24,10 @@ Decisions are append-only. Superseded decisions are marked but not deleted.
 
 ---
 
-## M0-c: Profile-based account swap via `~/.pi/agy-accounts/`
+## M0-c: Profile-based account swap via `~/.pi/agy-accounts/` ~~SUPERSEDED by M4-a~~
 
 **Date:** 2026-05-20
+**Superseded:** M4-a replaces the `~/.gemini/*.json` file-swap with HOME+DBUS env-override switching (agy moved creds into `antigravity-cli/antigravity-oauth-token`). The `agy_account` tool described here was already removed in M1.
 **Context:** User has personal + work Google accounts. agy reads OAuth credentials from `~/.gemini/oauth_creds.json` and `~/.gemini/google_accounts.json` on each call. No native multi-account support.
 **Decision:** `agy_account` with actions `list`/`current`/`backup`/`switch`. Backup copies the two `~/.gemini/*.json` files into `~/.pi/agy-accounts/<profile>/` at mode 0600. Switch writes them back atomically. Auto-snapshot to `.last-active/` before any switch.
 **Rationale:** agy reads creds from `~/.gemini/` per call — profile swap requires zero changes to agy itself. Profile names validated with `/^[a-zA-Z0-9_-]+$/` to prevent path traversal.
@@ -134,3 +135,53 @@ Decisions are append-only. Superseded decisions are marked but not deleted.
 - *Pass parent dir directly* — leaks unrelated files into Gemini's context; slow on large directories.
 - *Symlink instead of copy* — same exposure problem.
 **Consequences:** Small I/O overhead for the copy. Temp dir created in `os.tmpdir()` so cleanup failure doesn't pollute the project.
+
+---
+
+## M4-a: HOME + DBUS env-override account switching (supersedes M0-c)
+
+**Date:** 2026-05-29
+**Context:** agy moved credentials to `$HOME/.gemini/antigravity-cli/antigravity-oauth-token` and exposes no account/home CLI flag (`agy --help`: only `--print`, `--conversation`, `--add-dir`, `--log-file`, `--print-timeout`). M0-c's `~/.gemini/*.json` swap targets a layout agy no longer uses.
+**Decision:** Switch accounts by overriding the spawned child's env: `HOME=<account dir>` + `DBUS_SESSION_BUS_ADDRESS=<dead socket>` (kills the OS keyring so agy falls back to the on-disk token). Each account is a pre-authenticated HOME dir (operator convention `~/.ag-acp/accounts/<name>`). Proven by operator transcript.
+**Rationale:** Zero changes to agy — the child reads creds from its own HOME. The dead-socket DBUS address forces file-based creds deterministically.
+**Alternatives considered:** `~/.gemini` file-swap (M0-c, wrong layout now); symlink-per-profile (fragile); third-party rotators (external dep).
+**Consequences:** Accounts must be pre-authenticated. pi's own process HOME is unchanged — only the child env is overridden, which is why M4 also fixes `setModel` to target the account HOME (writer/reader path agreement). Supersedes M0-c.
+
+---
+
+## M4-b: Reactive-only rotation, explicit config pool
+
+**Date:** 2026-05-29
+**Context:** The quota/bans cheatsheet describes reactive switching (on 429) and proactive proportional pooling. User chose the simpler shape.
+**Decision:** Reactive-only — drain the current account until a 429-class error, then switch to the next entry. Pool defined explicitly in `~/.pi/agy-rotation.config.json` (`accounts[]`); no directory auto-discovery. Missing/invalid config → rotation OFF (byte-identical to prior behavior).
+**Rationale:** Matches the ask; simplest correct shape. State model leaves room to enable proportional pooling later without a rewrite.
+**Consequences:** One account absorbs volume until it 429s; daily soft cap is advisory in this mode.
+
+---
+
+## M4-c: Anti-ban guardrails from the quota/bans cheatsheet
+
+**Date:** 2026-05-29
+**Context:** Source: `tuxevil/pi-antigravity-rotator/QUOTA_AND_BANS_CHEATSHEET.md`. Empirical bans come from hammering 429s and unhuman volume, not from hitting quota itself.
+**Decision:** (1) Never re-hit a 429'd account within one call (exclude set + loop bound = pool size) — re-hitting escalates 429→permanent 403. (2) Respect per-account cooldown (Retry-After if parseable, else default 60s). (3) 403/ToS ⇒ permanent FLAGGED + global 6h protective pause across the pool. (4) Advisory daily soft cap (default 90; ~200/day ban heuristic). (5) Jittered retries; all-exhausted returns a clean retry-after payload, no busy-loop. (6) In-process mutex serializes the rotation critical section.
+**Consequences:** 403-vs-429 classification relies on agy log parsing; the ban regex is PROVISIONAL until a real 403 log is captured (spike S0). Ambiguous logs classify as quota — safer than a wrong 6h pause.
+
+---
+
+## M4-d: `pi.extensions` → `./src/index.ts` (load TS source, no dist)
+
+**Date:** 2026-05-29
+**Context:** `package.json` declared `pi.extensions: ["./dist/index.js"]`, but there is no build step and the local `dist/index.js` was a stale pre-rotation bundle. pi loaded the stale code; `src/` changes never ran — a silent trap that `tsc`/tests do not catch.
+**Decision:** Point `pi.extensions` at `./src/index.ts`; delete stale `dist/`. pi's loader (jiti) loads `.ts` directly (verified via the package's own `loadExtensions(['./src/index.ts'])` — registers all three tools). All relative imports use explicit `.ts` extensions for consistency under jiti + `node --experimental-strip-types` tests.
+**Rationale:** Reaffirms M0-e noEmit-TS shipping; removes the stale-code trap.
+**Consequences:** Restart pi to pick up the change. No build artifact to maintain.
+
+---
+
+## M4-e: Shared session store for cross-account continuity (planned — fast-follow)
+
+**Date:** 2026-05-29
+**Context:** Rotation-ON suppresses `conversationId` (cross-account leak prevention) ⇒ a fresh conversation per rotated call. A conversation UUID spans `conversations/<uuid>.pb` + `brain/<uuid>/` + `cache/last_conversations.json`, all under the account HOME.
+**Decision (planned, not in first cut):** pi-agy will auto-manage symlinks of each account's `conversations/` + `brain/` to one shared dir (idempotent at config load; migrate existing content first; never clobber), then re-enable `conversationId` on rotation-ON and make `session.ts` discovery HOME-aware. `installation_id` stays per-account — it differs per account (verified), and sharing it links the accounts (a ban-correlation signal).
+**Rationale:** Conversations are account-portable (account-agnostic `.pb`, no email/token binding found); sharing the uuid-keyed dirs lets any account resume. Auto-managed symlinks remove operator fragility.
+**Consequences:** Cross-account resume must be verified live (spike). See `feat-auto-switch-429.md` §12.

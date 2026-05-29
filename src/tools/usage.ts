@@ -1,5 +1,5 @@
-import type { AgyToolDetails } from "../types";
-import { summarize } from "../usage";
+import type { AgyToolDetails } from "../types.ts";
+import { summarize } from "../usage.ts";
 
 export async function executeUsage(
 	params: any,

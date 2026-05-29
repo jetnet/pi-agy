@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { getCurrentAccount } from "./accounts";
-import type { UsageRecord, UsageSummary } from "./types";
+import { getCurrentAccount } from "./accounts.ts";
+import type { UsageRecord, UsageSummary } from "./types.ts";
 
 // ── Storage paths ──────────────────────────────────────────────────────────────
 

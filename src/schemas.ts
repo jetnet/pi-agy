@@ -46,6 +46,15 @@ export const AgyParams = Type.Object({
 				"Omit to use whatever model is configured in the agy TUI.",
 		}),
 	),
+	account: Type.Optional(
+		Type.String({
+			description:
+				"Pin a specific rotation account (by config name, e.g. 'dv') for this call. " +
+				"Bypasses auto-rotation — if this account is exhausted or flagged, the call fails. " +
+				"Only valid when rotation is configured in ~/.pi/agy-rotation.config.json. " +
+				"Omit to use auto-rotation (or Pi's default account if rotation is not configured).",
+		}),
+	),
 });
 
 // ── agy_image ──────────────────────────────────────────────────────────────────
@@ -74,6 +83,14 @@ export const ImageParams = Type.Object({
 			description:
 				"Model to use for this call. Same options as the agy tool. " +
 				"Omit to use whatever model is configured in the agy TUI.",
+		}),
+	),
+	account: Type.Optional(
+		Type.String({
+			description:
+				"Pin a specific rotation account (by config name) for this call. " +
+				"Same semantics as the agy tool account param. " +
+				"Omit to use auto-rotation or Pi's default account.",
 		}),
 	),
 });
