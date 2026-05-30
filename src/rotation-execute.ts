@@ -262,11 +262,12 @@ export async function executeWithRotation(opts: RotationExecOpts): Promise<ExecR
 
 			if (pinResult.errorClass === "banned") {
 				const until = new Date(rotState.globalPauseUntil).toLocaleString();
+				const appeal = pinResult.appealUrl ? `\nAppeal: ${pinResult.appealUrl}` : "";
 				return {
 					content: [
 						{
 							type: "text",
-							text: `⛔ Account '${pinEntry.name}' received a ToS/403 signal. Flagged permanently. Global pool paused until ${until}. Contact Google if this is unexpected.`,
+							text: `⛔ Account '${pinEntry.name}' received a ToS/403 signal. Flagged permanently. Global pool paused until ${until}.${appeal}`,
 						},
 					],
 					details: {
@@ -430,11 +431,12 @@ export async function executeWithRotation(opts: RotationExecOpts): Promise<ExecR
 				markFlagged(rotState, acct.name, rotConfig.protectivePauseHours);
 				saveState(rotState);
 				const until = new Date(rotState.globalPauseUntil).toLocaleString();
+				const appeal = result.appealUrl ? `\nAppeal: ${result.appealUrl}` : "";
 				return {
 					content: [
 						{
 							type: "text",
-							text: `⛔ Account '${acct.name}' received a ToS/403 signal. Flagged permanently. Global pool paused until ${until}. Contact Google if this is unexpected.`,
+							text: `⛔ Account '${acct.name}' received a ToS/403 signal. Flagged permanently. Global pool paused until ${until}.${appeal}`,
 						},
 					],
 					details: {

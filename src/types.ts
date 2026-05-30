@@ -27,12 +27,14 @@ export interface SpawnAgyResult {
 	 * Classified error type from log analysis.
 	 * - 'ok'     — call succeeded
 	 * - 'quota'  — RESOURCE_EXHAUSTED / individual quota reached
-	 * - 'banned' — PERMISSION_DENIED / ToS 403 (⚠ provisional regex — unverified against real ban)
+	 * - 'banned' — PERMISSION_DENIED / ToS 403 (verified 2026-05-30)
 	 * - 'error'  — spawn failure or other non-quota error
 	 */
 	errorClass: "ok" | "quota" | "banned" | "error";
 	/** Cooldown duration in seconds parsed from agy's log (best-effort). */
 	cooldownSec?: number;
+	/** Appeal URL from a ToS/403 ban response (e.g. Google Forms link). */
+	appealUrl?: string;
 }
 
 export interface UsageRecord {

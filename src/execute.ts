@@ -124,6 +124,7 @@ export function spawnAgy(prompt: string, opts: SpawnAgyOptions): Promise<SpawnAg
 				quotaError: logInfo.quotaError,
 				errorClass,
 				cooldownSec: logInfo.cooldownSec,
+				appealUrl: logInfo.appealUrl,
 			});
 		});
 
@@ -165,17 +166,16 @@ interface LogInfo {
 	/**
 	 * Ban/ToS error detected from the log.
 	 *
-	 * ⚠ PROVISIONAL: the exact log string for a real HTTP 403 / ToS ban has
-	 * NOT been observed in production. The regexes below are based on gRPC
-	 * status code names and expected Google API error patterns.
-	 * Before relying on 'banned' classification, capture a real 403 log and
-	 * verify the regex fires correctly. Until then:
-	 *   - False positive → triggers a 6h global pause (over-cautious but safe)
-	 *   - False negative → logs as 'error', no ban handling (safe fallback)
-	 * Ambiguous cases (quota + ban both present) deliberately degrade to
-	 * 'quota' — see classifyError below.
+	 * VERIFIED (2026-05-30): regex confirmed against a real 403 ToS ban log
+	 * from a banned account. The log contains a JSON error body with:
+	 *   "status": "PERMISSION_DENIED"
+	 *   "message": "...violation of Terms of Service..."
+	 * Both patterns match. The ambiguity policy (quota wins over banned when
+	 * both appear) remains — see classifyError below.
 	 */
 	banError?: string;
+	/** Appeal URL extracted from a ToS/403 ban response (e.g. Google Forms link). */
+	appealUrl?: string;
 	/** Retry-After / cooldown seconds parsed from the log (best-effort). */
 	cooldownSec?: number;
 }
@@ -210,13 +210,11 @@ function parseLogContent(log: string): LogInfo {
 	}
 
 	// ── Ban / ToS detection ─────────────────────────────────────────────────
-	// ⚠ PROVISIONAL REGEX — not verified against a real 403 ToS ban log.
-	// See the LogInfo.banError JSDoc above for the full caveat.
-	//
-	// Rationale for patterns chosen:
-	//   - PERMISSION_DENIED: gRPC status code for HTTP 403
-	//   - "Terms of Service": common Google ToS violation message
-	//   - "tos_violation": URL-form of ToS error sometimes in API JSON bodies
+	// VERIFIED (2026-05-30) against a real 403 ToS ban log. Patterns confirmed:
+	//   - PERMISSION_DENIED: gRPC status string ("status": "PERMISSION_DENIED")
+	//   - "Terms of Service": in the human-readable error message
+	// Additional patterns kept for coverage:
+	//   - "tos_violation": URL-form sometimes in API JSON bodies
 	//   - "policy violation": alternative phrasing in some Google error payloads
 	//
 	// Deliberately NOT matching generic "403" or "permission" strings to
@@ -224,6 +222,13 @@ function parseLogContent(log: string): LogInfo {
 	const banMatch = log.match(/PERMISSION_DENIED|Terms of Service|tos_violation|policy.?violation/i);
 	if (banMatch) {
 		info.banError = banMatch[0];
+	}
+
+	// Appeal URL — extract from the JSON error body so users can self-serve.
+	// Real format: "appeal_url": "https://forms.gle/..."
+	const appealMatch = log.match(/"appeal_url":\s*"([^"]+)"/i);
+	if (appealMatch?.[1]) {
+		info.appealUrl = appealMatch[1];
 	}
 
 	return info;
@@ -274,4 +279,12 @@ export function classifyError(processError: boolean, logInfo: LogInfo): SpawnAgy
  */
 export function classifyLogContent(logContent: string, processError: boolean): SpawnAgyResult["errorClass"] {
 	return classifyError(processError, parseLogContent(logContent));
+}
+
+/**
+ * Extract appeal URL from a synthetic log string.
+ * Exported for unit testing only.
+ */
+export function extractAppealUrl(logContent: string): string | undefined {
+	return parseLogContent(logContent).appealUrl;
 }

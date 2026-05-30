@@ -12,7 +12,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { describe, it } from "node:test";
 
-import { classifyLogContent } from "../src/execute.ts";
+import { classifyLogContent, extractAppealUrl } from "../src/execute.ts";
 import {
 	checkPinUsable,
 	loadRotationConfigFrom,
@@ -416,9 +416,7 @@ describe("buildTryOrder wrap-around", () => {
 // These tests use SYNTHETIC log strings to verify the classification logic
 // without requiring a real agy binary or quota errors.
 //
-// ⚠ The 'banned' path is PROVISIONAL — unverified against a real 403 log.
-// These tests lock the current regex behavior; update them when Spike S0
-// (real 403 log capture) is completed.
+// Ban path VERIFIED (2026-05-30) against a real 403 ToS ban log.
 
 describe("classifyLogContent — log classification fixtures", () => {
 	it("RESOURCE_EXHAUSTED-only → 'quota'", () => {
@@ -456,6 +454,44 @@ describe("classifyLogContent — log classification fixtures", () => {
 	it("Terms of Service pattern → 'banned'", () => {
 		const log = "Error: Terms of Service violation detected";
 		assert.equal(classifyLogContent(log, false), "banned");
+	});
+
+	it("real 403 ban log (verified 2026-05-30) → 'banned'", () => {
+		const log = [
+			'http_helpers.go:228] Failed to make code assist backend request (listExperiments): {',
+			'  "error": {',
+			'    "code": 403,',
+			'    "message": "This service has been disabled in this account for violation of Terms of Service.",',
+			'    "status": "PERMISSION_DENIED"',
+			'  }',
+			'}',
+		].join("\n");
+		assert.equal(classifyLogContent(log, true), "banned");
+	});
+});
+
+// ── extractAppealUrl — appeal URL extraction from ban logs ─────────────────
+
+describe("extractAppealUrl", () => {
+	it("extracts appeal URL from real ban log JSON", () => {
+		const log = '"appeal_url": "https://forms.gle/hGzM9MEUv2azZsrb9"';
+		assert.equal(extractAppealUrl(log), "https://forms.gle/hGzM9MEUv2azZsrb9");
+	});
+
+	it("returns undefined when no appeal URL present", () => {
+		const log = "PERMISSION_DENIED: some error without appeal link";
+		assert.equal(extractAppealUrl(log), undefined);
+	});
+
+	it("extracts from full real ban log structure", () => {
+		const log = [
+			'"metadata": {',
+			'  "appeal_url": "https://forms.gle/hGzM9MEUv2azZsrb9",',
+			'  "uiMessage": "true",',
+			'  "appeal_url_link_text": "Submit Appeal"',
+			'}',
+		].join("\n");
+		assert.equal(extractAppealUrl(log), "https://forms.gle/hGzM9MEUv2azZsrb9");
 	});
 });
 
