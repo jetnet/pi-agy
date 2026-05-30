@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New optional `account` pin parameter on `agy` and `agy_image` — force a specific named account for one call.
 - Rotation health state persisted to `~/.pi/agy-rotation-state.json` (mode 0600) across pi restarts.
 - New `src/rotation.ts` module with 51 unit tests covering all state-machine transitions.
+- Example config `agy-rotation.config.example.json` + an **Account rotation** section in the README (setup, config reference, anti-ban behavior, `account` pin).
+
+### Changed
+- Conversation auto-continue is **disabled while rotation is on** (each rotated call starts a fresh agy conversation, since a conversation is bound to the account HOME that created it). Cross-account session sharing is planned as a fast-follow.
 
 ### Fixed
 - `pi.extensions` now correctly points to `./src/index.ts` (was a stale `./dist/index.js` — dist was gitignored and never rebuilt, so all source changes since May 25 were silently not loaded by pi).

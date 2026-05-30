@@ -1,0 +1,11 @@
+{
+	"accounts": [
+		{ "name": "dv", "home": "/home/youruser/.ag-acp/accounts/dv" },
+		{ "name": "jn", "home": "/home/youruser/.ag-acp/accounts/jn" }
+	],
+	"dbusAddress": "unix:path=/tmp/ag-acp-no-keyring-main",
+	"dailySoftCap": 90,
+	"defaultCooldownSec": 60,
+	"protectivePauseHours": 6,
+	"jitterMs": [400, 1200]
+}
